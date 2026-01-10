@@ -46,3 +46,4 @@ src/main/resources/application-*.properties
 
 !application-example.properties
 
+/bin/
