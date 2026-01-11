@@ -1,5 +1,7 @@
 package com.freshlink.model;
 
+import java.math.BigDecimal;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -11,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -26,6 +29,9 @@ public class Fish {
 	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+	
+	@Version
+	private Long version;
 
     
     @ManyToOne(fetch = FetchType.LAZY)
@@ -36,10 +42,12 @@ public class Fish {
     private String name;
 
     @Column(nullable = false)
-    private double pricePerKg;
+    private BigDecimal pricePerKg;
 
     @Column(nullable = false)
     private double availableKg;
+    
+    private double reservedKg;
 
      
     @ManyToOne(fetch = FetchType.LAZY)

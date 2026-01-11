@@ -22,7 +22,7 @@ import lombok.NoArgsConstructor;
 public class SupplyMatch {
 	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long matchId;
+    private Long id;
 
     @ManyToOne
     private DemandRequest demandRequest;

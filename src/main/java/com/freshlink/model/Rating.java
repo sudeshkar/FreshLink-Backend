@@ -1,10 +1,15 @@
 package com.freshlink.model;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,10 +21,10 @@ import lombok.NoArgsConstructor;
 public class Rating {
 	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long ratingId;
+    private Long id;
 
-    @ManyToOne
-    private Delivery delivery;
+	@OneToOne
+    private Order order;
 
     @ManyToOne
     private Cafe cafe;
@@ -27,6 +32,10 @@ public class Rating {
     @ManyToOne
     private Supplier supplier;
 
+    @Min(1)
+    @Max(5)
     private Integer score;
     private String comment;
+    
+    private LocalDateTime createdAt;
 }

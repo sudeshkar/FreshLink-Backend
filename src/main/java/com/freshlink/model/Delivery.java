@@ -24,9 +24,9 @@ public class Delivery {
 		@Id
 	    @GeneratedValue(strategy = GenerationType.IDENTITY)
 	    private Long deliveryId;
-
+	    
 	    @OneToOne
-	    private SupplyMatch supplyMatch;
+	    private Order order;
 
 	    private LocalDateTime deliveryDate;
 

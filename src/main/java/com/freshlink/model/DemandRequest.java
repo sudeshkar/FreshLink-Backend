@@ -22,7 +22,7 @@ import lombok.NoArgsConstructor;
 public class DemandRequest {
 	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long demandId;
+    private Long id;
 
     @ManyToOne
     private Cafe cafe;
@@ -35,6 +35,5 @@ public class DemandRequest {
     private LocalDate weekStartDate;
 
     @Enumerated(EnumType.STRING)
-    
     private DemandStatus status;
 }

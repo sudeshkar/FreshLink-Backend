@@ -22,6 +22,7 @@ import com.freshlink.orderdto.OrderResponse;
 import com.freshlink.service.interfaces.CafeService;
 import com.freshlink.userprofiledto.CafeProfileResponse;
 
+import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
@@ -59,9 +60,14 @@ public class CafeServiceImpl implements CafeService{
 		Cafe cafe = cafeRepository.findByEmail(email)
 	            .orElseThrow(() -> new RuntimeException("Cafe not found"));
 		
+		if (dto.items() == null || dto.items().isEmpty()) {
+		    throw new RuntimeException("Order must contain at least one item");
+		}
+
+		
 		 Order order = new Order();
 		    order.setCafe(cafe);
-		    order.setStatus(OrderStatus.CREATED);
+		     
 		    
 		    List<OrderItem> items = dto.items().stream().map(itemDto -> {
 
@@ -78,6 +84,7 @@ public class CafeServiceImpl implements CafeService{
 		        fish.setAvailableKg(
 		            fish.getAvailableKg() - itemDto.quantityKg()
 		        );
+		        fish.setReservedKg(fish.getReservedKg()+itemDto.quantityKg());
 
 		        OrderItem item = new OrderItem();
 		        item.setOrder(order);
@@ -93,7 +100,12 @@ public class CafeServiceImpl implements CafeService{
 
 		    Order savedOrder = orderRepository.save(order);
 
-		    return orderMapper.toOrderResponse(savedOrder);
+		    try {
+		        return orderMapper.toOrderResponse(savedOrder);
+		    } catch (OptimisticLockException e) {
+		        throw new RuntimeException("Fish stock was updated by another order. Please retry.");
+		    }
+
 		
 	}
 
@@ -106,6 +118,33 @@ public class CafeServiceImpl implements CafeService{
 		            .stream()
 		            .map(orderMapper::toOrderResponse)
 		            .collect(Collectors.toList());
+	}
+
+	@Override
+	public void cancelOrder(Long orderId,String cafeEmail) {
+		 Cafe cafe = cafeRepository.findByEmail(cafeEmail)
+		            .orElseThrow(() -> new RuntimeException("Cafe not found"));
+
+		    Order order = orderRepository.findById(orderId)
+		            .orElseThrow(() -> new RuntimeException("Order not found"));
+		    
+		    if (order.getStatus() != OrderStatus.REQUESTED) {
+		        throw new RuntimeException("Order cannot be cancelled");
+		    }
+		    
+		    for (OrderItem item : order.getItems()) {
+		        Fish fish = item.getFish();
+
+		        fish.setAvailableKg(
+		            fish.getAvailableKg() + item.getQuantityKg()
+		        );
+		        fish.setReservedKg(
+		            fish.getReservedKg() - item.getQuantityKg()
+		        );
+		    }
+		    
+		    order.setStatus(OrderStatus.CANCELLED);
+		
 	}
 
 }

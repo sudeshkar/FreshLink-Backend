@@ -23,7 +23,9 @@ public class Supplier extends User {
 
     private String licenseNumber;
     
-   
+    private Double averageRating;
+    private Integer ratingCount;
+
     
     @PrePersist
     @PreUpdate

@@ -1,9 +1,11 @@
 package com.freshlink.orderdto;
 
+import java.math.BigDecimal;
+
 public record OrderItemResponse(
 		String fishName,
         double quantityKg,
-        double pricePerKg,
+        BigDecimal pricePerKg,
         double totalPrice
 		) {
 

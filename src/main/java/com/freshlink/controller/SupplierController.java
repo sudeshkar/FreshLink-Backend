@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
+import com.freshlink.orderdto.OrderResponse;
 import com.freshlink.service.interfaces.SupplierService;
 import com.freshlink.userprofiledto.SupplierProfileResponse;
 
@@ -57,5 +58,35 @@ public class SupplierController {
     public void deleteFish(@PathVariable Long id, Authentication auth) {
         supplierService.deleteFish(id, auth.getName());
     }
+    
+    @PutMapping("/orders/{orderId}/accept")
+    public OrderResponse acceptOrder(@PathVariable Long orderId, Authentication auth) {
+    	return supplierService.acceptOrder(orderId,auth.getName());
+    }
+    
+    @GetMapping("/orders")
+    public List<OrderResponse> getIncomingOrders(Authentication auth){
+    	
+    	return supplierService.getIncomingOrders(auth.getName());
+    	
+    }
+    
+    @PutMapping("/orders/{orderId}/reject")
+    public void rejectOrder(@PathVariable Long orderId, Authentication auth) {
+    	supplierService.rejectOrder(orderId,auth.getName());
+    }
+    
+    @PutMapping("/orders/{orderId}/markdelivering")
+    public void markDelivering(@PathVariable Long orderId,Authentication auth) {
+    	supplierService.markDelivering(orderId,auth.getName());
+    }
+    
+    @PutMapping("/orders/{orderId}/completeorder")
+    public void completeOrder(@PathVariable Long orderId,Authentication auth) {
+    	supplierService.completeOrder(orderId,auth.getName());
+    }
+    
+    
+    
 
 }

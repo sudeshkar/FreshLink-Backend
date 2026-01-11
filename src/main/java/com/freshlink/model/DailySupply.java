@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 public class DailySupply {
 	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long supplyId;
+    private Long id;
 
     @ManyToOne
     @JoinColumn(name = "supplier_id")

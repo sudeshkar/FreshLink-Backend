@@ -1,10 +1,12 @@
 package com.freshlink.fishdto;
 
+import java.math.BigDecimal;
+
 public record FishMarketResponse(
 		 	Long id,
 	        String name,
 	        String type,
-	        double pricePerKg,
+	        BigDecimal pricePerKg,
 	        double availableKg,
 	        String season,
 	        String supplierName

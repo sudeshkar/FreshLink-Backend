@@ -37,7 +37,7 @@ public class OrderMapper {
 
     private OrderItemResponse toItemResponse(OrderItem item) {
 
-        double totalPrice = item.getQuantityKg() * item.getPricePerKg();
+        double totalPrice = item.getQuantityKg() * item.getPricePerKg().doubleValue();
 
         return new OrderItemResponse(
             item.getFish().getName(),

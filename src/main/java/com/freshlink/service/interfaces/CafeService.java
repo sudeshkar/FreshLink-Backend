@@ -17,4 +17,6 @@ public interface CafeService {
 
 	List<OrderResponse> getOrders(String email);
 
+	void cancelOrder(Long orderId, String cafeEmail);
+
 }

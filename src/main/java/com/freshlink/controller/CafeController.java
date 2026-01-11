@@ -5,7 +5,9 @@ import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -14,7 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.freshlink.fishdto.FishMarketResponse;
 import com.freshlink.orderdto.OrderCreateRequest;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.rating.dto.RatingRequest;
 import com.freshlink.service.interfaces.CafeService;
+import com.freshlink.service.interfaces.RatingService;
 import com.freshlink.userprofiledto.CafeProfileResponse;
 
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 public class CafeController {
 	
 	 	private final CafeService cafeService;
+	 	private final RatingService ratingService;
 
 	    @GetMapping("/me")
 	    public CafeProfileResponse getProfile(Authentication auth) {
@@ -49,5 +54,15 @@ public class CafeController {
 	    @GetMapping("/orders")
 	    public List<OrderResponse> myOrders(Authentication auth) {
 	        return cafeService.getOrders(auth.getName());
+	    }
+	    
+	    @PutMapping("/orders/{orderId}/cancel")
+	    public void cancelOrder(@PathVariable Long orderId,Authentication auth) {
+	    	cafeService.cancelOrder(orderId,auth.getName());
+	    }
+	    
+	    @PostMapping("/orders/{orderId}/rate")
+	    public void rateSupplier(@PathVariable Long orderId,@RequestBody RatingRequest ratingRequest) {
+	    	ratingService.rateSupplier(orderId,ratingRequest);
 	    }
 }
