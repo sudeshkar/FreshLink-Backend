@@ -74,7 +74,7 @@ Base path: `/api/v1`
 | `POST` | `/auth/register/cafe` | Register a café account |
 | `POST` | `/auth/register/supplier` | Register a supplier account |
 | `POST` | `/auth/request-otp` | Send a verification OTP to an email |
-| `POST` | `/auth/verfy-otp` | Confirm the OTP and verify the account |
+| `POST` | `/auth/verify-otp` | Confirm the OTP and verify the account |
 | `POST` | `/auth/login` | Authenticate, receive access + refresh tokens |
 | `POST` | `/auth/refresh` | Exchange a refresh token for a new access token |
 | `POST` | `/auth/logout` | Clear the security context |
@@ -181,6 +181,10 @@ spring.mail.username=YOUR_EMAIL
 spring.mail.password=YOUR_APP_PASSWORD
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
+
+# Bootstrap admin account — if either value is omitted, no admin is created
+app.admin.email=admin@yourdomain.com
+app.admin.password=YOUR_STRONG_PASSWORD
 ```
 
 Run it:
@@ -192,7 +196,7 @@ mvnw.cmd spring-boot:run      # Windows
 
 The API comes up on `http://localhost:8080`.
 
-On first start the application seeds a default admin account and a set of fish types. Change the admin password immediately in any non-local environment.
+On first start the application seeds the fish-type reference data, and creates the admin account from `app.admin.*` if both values are set. No credentials are compiled into the source — omit them and admin bootstrapping is skipped with a warning.
 
 ### Trying it out
 

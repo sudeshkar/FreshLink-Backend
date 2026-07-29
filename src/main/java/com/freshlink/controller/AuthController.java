@@ -58,7 +58,7 @@ public class AuthController {
         authService.registerSupplier(dto);
     }
     
-    @PostMapping("/verfy-otp")
+    @PostMapping("/verify-otp")
     public String verifyOtp(@RequestBody VerifyOtpRequest dto) {
     	
     	otpService.verifyOtp(dto.email(), dto.otp());
