@@ -612,6 +612,18 @@ public class SupplierServiceImpl implements SupplierService{
 			throw new BusinessRuleException("Catch date and time cannot be in the future");
 		}
 
+		// Landing a catch is what makes fish sellable, so it credits the listing.
+		// Fish.availableKg is the single stock ledger; a DailySupply row is the
+		// dated intake record behind it, carrying the freshness the matcher ranks
+		// on. Keeping two independent quantities meant the spot market and the
+		// matching engine could each believe they had stock the other had sold.
+		Fish listing = fishRepository.findBySupplierAndFishType(supplier, fishType)
+				.orElseThrow(() -> new BusinessRuleException(
+						"Create a %s listing before recording a catch - the catch is added to it."
+								.formatted(fishType.getName())));
+		listing.setAvailableKg(listing.getAvailableKg() + dto.quantity());
+		fishRepository.save(listing);
+
 		DailySupply supply = new DailySupply();
 		supply.setSupplier(supplier);
 		supply.setFishType(fishType);
@@ -656,6 +668,19 @@ public class SupplierServiceImpl implements SupplierService{
 						"Cannot reduce quantity below the %.1f kg already accepted against this supply"
 								.formatted(committed));
 			}
+
+			// Correcting the intake has to move the ledger with it, or the two
+			// drift apart again.
+			double delta = dto.quantity() - supply.getQuantity();
+			Fish listing = requireListingFor(supply);
+			if (listing.getAvailableKg() + delta < 0) {
+				throw new BusinessRuleException(
+						"Reducing this catch by %.1f kg would take the %s listing below zero - %.1f kg has already been sold."
+								.formatted(-delta, listing.getName(), listing.getAvailableKg()));
+			}
+			listing.setAvailableKg(listing.getAvailableKg() + delta);
+			fishRepository.save(listing);
+
 			supply.setQuantity(dto.quantity());
 			supply.setStatus(dto.quantity() == 0 ? SupplyStatus.EXHAUSTED : SupplyStatus.AVAILABLE);
 		}
@@ -679,10 +704,28 @@ public class SupplierServiceImpl implements SupplierService{
 					"This supply has been accepted against a demand and can no longer be deleted");
 		}
 
+		// Removing an intake record takes its quantity back off the ledger.
+		Fish listing = requireListingFor(supply);
+		if (listing.getAvailableKg() < supply.getQuantity()) {
+			throw new BusinessRuleException(
+					"Cannot remove this catch: only %.1f kg of the %s listing is unsold, so %.1f kg cannot be taken back."
+							.formatted(listing.getAvailableKg(), listing.getName(), supply.getQuantity()));
+		}
+		listing.setAvailableKg(listing.getAvailableKg() - supply.getQuantity());
+		fishRepository.save(listing);
+
 		// Pending matches hold no stock, but the FK to DailySupply is uncascaded
 		// so they have to go first.
 		supplyMatchRepository.deleteAll(matches);
 		dailySupplyRepository.delete(supply);
+	}
+
+	/** The listing a catch feeds. Guaranteed to exist - addDailySupply requires it. */
+	private Fish requireListingFor(DailySupply supply) {
+		return fishRepository.findBySupplierAndFishType(supply.getSupplier(), supply.getFishType())
+				.orElseThrow(() -> new BusinessRuleException(
+						"The %s listing this catch belongs to no longer exists."
+								.formatted(supply.getFishType().getName())));
 	}
 
 	/** Quantity locked in by matches the supplier has already accepted. */
@@ -739,11 +782,13 @@ public class SupplierServiceImpl implements SupplierService{
 
 	    DailySupply supply = match.getDailySupply();
 
-	    // Deduct quantity ONLY here
+	    // The intake record is drawn down alongside the listing so the two stay in
+	    // step: createOrderFromMatch below reserves the same quantity on the Fish
+	    // ledger, and stock landed by this catch is no longer offerable from it.
 	    double remainingQty = supply.getQuantity() - match.getConfirmedQuantity();
-	    supply.setQuantity(remainingQty);
+	    supply.setQuantity(Math.max(0, remainingQty));
 
-	    if (remainingQty == 0) {
+	    if (supply.getQuantity() <= 0) {
 	        supply.setStatus(SupplyStatus.EXHAUSTED);
 	    }
 

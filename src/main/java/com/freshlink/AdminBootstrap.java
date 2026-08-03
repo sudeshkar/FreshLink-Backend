@@ -250,13 +250,23 @@ public class AdminBootstrap {
 		FishType tuna = fishTypeRepository.findByNameIgnoreCase("Tuna").orElseThrow();
 		FishType salmon = fishTypeRepository.findByNameIgnoreCase("Salmon").orElseThrow();
 
-		dailySupplyRepository.saveAll(List.of(
+		List<DailySupply> catches = dailySupplyRepository.saveAll(List.of(
 			new DailySupply(null, supplier1, tuna, 50.0,
 				LocalDateTime.now().minusHours(3), SupplyStatus.AVAILABLE, 0.9),
 
 			new DailySupply(null, supplier2, salmon, 40.0,
 				LocalDateTime.now().minusHours(6), SupplyStatus.AVAILABLE, 0.85)
 		));
+
+		// Mirrors addDailySupply: a landed catch is credited to the listing, so the
+		// demo data satisfies the same invariant the API enforces rather than
+		// starting life with the two quantities already out of step.
+		catches.forEach(landed -> fishRepository
+			.findBySupplierAndFishType(landed.getSupplier(), landed.getFishType())
+			.ifPresent(listing -> {
+				listing.setAvailableKg(listing.getAvailableKg() + landed.getQuantity());
+				fishRepository.save(listing);
+			}));
 	}
 
 }

@@ -192,6 +192,12 @@ class DailySupplyOwnershipTest {
 
 		when(supplierRepository.findByEmail("owner@supplier.test")).thenReturn(Optional.of(owner));
 		when(fishTypeRepository.findByNameIgnoreCase("Tuna")).thenReturn(Optional.of(tuna));
+		// A catch credits the supplier's listing, so one has to exist.
+		com.freshlink.model.Fish listing = new com.freshlink.model.Fish();
+		listing.setSupplier(owner);
+		listing.setFishType(tuna);
+		listing.setAvailableKg(0);
+		when(fishRepository.findBySupplierAndFishType(owner, tuna)).thenReturn(Optional.of(listing));
 		when(dailySupplyRepository.save(any())).thenAnswer(inv -> {
 			DailySupply saved = inv.getArgument(0);
 			saved.setId(7L);

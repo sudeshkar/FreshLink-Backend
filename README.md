@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Spring%20Security-JWT-6DB33F?style=flat-square&logo=springsecurity&logoColor=white" alt="Spring Security"/>
   <img src="https://img.shields.io/badge/Swagger-85EA2D?style=flat-square&logo=swagger&logoColor=black" alt="Swagger"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
-  <img src="https://img.shields.io/badge/tests-82%20passing-brightgreen?style=flat-square" alt="82 tests"/>
+  <img src="https://img.shields.io/badge/tests-88%20passing-brightgreen?style=flat-square" alt="88 tests"/>
 </p>
 
 ---
@@ -311,6 +311,13 @@ Supplier records daily catch      Café posts demand
 Matching runs on creation and again every 10 minutes for demand still open or partially
 filled, and only ever allocates the outstanding shortfall.
 
+**One ledger.** `Fish.availableKg` is the single source of truth for sellable stock; a
+`DailySupply` row is the dated intake behind it, carrying the freshness the matcher ranks
+on. Recording a catch credits the listing, correcting one moves both together, and
+removing one takes its quantity back off — refused if that fish has already been sold.
+They were previously independent numbers, so the spot market and the matching engine
+could each believe they held stock the other had sold.
+
 A pending match reserves part of a supply, so one a supplier never answers is expired
 after 24 hours (`MATCH_PENDING_TIMEOUT_HOURS`) and its quantity returns to the pool.
 Demand whose delivery date has passed is closed rather than retried forever.
@@ -510,7 +517,7 @@ re-register on the same address to shed its rating history.
 
 ## Testing
 
-**82 tests** — 72 unit, 10 integration. All of them run on every push.
+**88 tests** — 78 unit, 10 integration. All of them run on every push.
 
 ```bash
 ./mvnw test      # unit tests only (fast, no database needed for most)
@@ -534,6 +541,7 @@ are invisible in a code read and expensive to get wrong:
 | `DeliveryTrackingTest` | Status transitions, server-stamped arrival, terminal states |
 | `DeliveryRouteTest` | Route grouping, dispatch, completion guards, detach-on-cancel |
 | `MatchedOrderStockTest` | A matched order reserves its listing and cannot oversell |
+| `StockLedgerTest` | A catch credits its listing, and corrections move both together |
 | `AdminServiceDeletionTest` | Self-delete, last-admin and in-flight-order guards |
 | `RefreshTokenRotationTest` | Hashing, rotation, replay revocation, suspended accounts |
 | `RateLimitServiceTest` | Capacity, key isolation, refill, idle eviction |
