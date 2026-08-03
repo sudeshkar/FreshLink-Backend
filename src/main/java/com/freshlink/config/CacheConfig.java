@@ -13,8 +13,6 @@ import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 
-import com.freshlink.security.AccountStatusService;
-
 /**
  * Caching: in-process by default, shared through Redis when asked for.
  *
@@ -26,8 +24,6 @@ import com.freshlink.security.AccountStatusService;
 @EnableCaching
 public class CacheConfig {
 
-	/** What bounds how long a revoked account keeps working. Deliberately short. */
-	private static final Duration ACCOUNT_STATUS_TTL = Duration.ofSeconds(60);
 	private static final Duration ANALYTICS_TTL = Duration.ofMinutes(10);
 
 	/**
@@ -41,8 +37,7 @@ public class CacheConfig {
 		return new ConcurrentMapCacheManager(
 				"admin-dashboard",
 				"supplier-analytics",
-				"cafe-analytics",
-				AccountStatusService.CACHE);
+				"cafe-analytics");
 	}
 
 	/**
@@ -61,8 +56,6 @@ public class CacheConfig {
 		return RedisCacheManager.builder(connectionFactory)
 				.cacheDefaults(analytics)
 				.withInitialCacheConfigurations(Map.of(
-						AccountStatusService.CACHE,
-						RedisCacheConfiguration.defaultCacheConfig().entryTtl(ACCOUNT_STATUS_TTL),
 						"admin-dashboard", analytics,
 						"supplier-analytics", analytics,
 						"cafe-analytics", analytics))

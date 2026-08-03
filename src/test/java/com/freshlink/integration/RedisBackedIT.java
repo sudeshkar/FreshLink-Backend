@@ -9,11 +9,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cache.CacheManager;
-import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.freshlink.security.AccountStatusCache;
 import com.freshlink.security.AccountStatusService;
+import com.freshlink.security.RedisAccountStatusCache;
 import com.freshlink.security.RateLimitService;
 import com.freshlink.security.RedisRateLimitService;
 
@@ -36,7 +36,7 @@ import com.freshlink.security.RedisRateLimitService;
 class RedisBackedIT {
 
 	@Autowired private RateLimitService rateLimitService;
-	@Autowired private CacheManager cacheManager;
+	@Autowired private AccountStatusCache accountStatusCache;
 	@Autowired private AccountStatusService accountStatusService;
 	@Autowired private com.freshlink.Repository.UserRepository userRepository;
 
@@ -48,7 +48,6 @@ class RedisBackedIT {
 						+ "otherwise every replica silently grants the full allowance")
 				.isInstanceOf(RedisRateLimitService.class);
 
-		assertThat(cacheManager).isInstanceOf(RedisCacheManager.class);
 	}
 
 	@Test
@@ -99,44 +98,40 @@ class RedisBackedIT {
 	@Autowired private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
 	@Test
-	@DisplayName("DIAGNOSTIC: is the Spring Redis connection usable at all")
-	void springRedisConnectionWorks() {
-		String key = "diag-" + System.nanoTime();
-		redisTemplate.opsForValue().set(key, "hello");
-		assertThat(redisTemplate.opsForValue().get(key))
-				.as("a raw round trip through Spring's connection factory")
-				.isEqualTo("hello");
-	}
+	@DisplayName("account status is cached in Redis, so every replica agrees")
+	void accountStatusCacheIsShared() {
+		assertThat(accountStatusCache)
+				.as("app.cache.backend=redis must select the shared cache")
+				.isInstanceOf(RedisAccountStatusCache.class);
 
-	@Test
-	@DisplayName("DIAGNOSTIC: does a value written to the cache come back")
-	void cacheRoundTripWorks() {
-		String key = "diag-cache-" + System.nanoTime();
-		var cache = cacheManager.getCache(AccountStatusService.CACHE);
-		assertThat(cache).as("the cache must exist").isNotNull();
+		String email = "shared-" + System.nanoTime() + "@freshlink.test";
 
-		cache.put(key, Boolean.TRUE);
-		assertThat(cache.get(key))
-				.as("written straight to the cache and read straight back")
-				.isNotNull();
+		assertThat(accountStatusCache.get(email))
+				.as("nothing cached yet")
+				.isEmpty();
+
+		accountStatusCache.put(email, true, Duration.ofSeconds(60));
+
+		assertThat(accountStatusCache.get(email))
+				.as("an answer written by one instance is readable by another")
+				.contains(true);
+
+		accountStatusCache.evict(email);
+		assertThat(accountStatusCache.get(email)).isEmpty();
 	}
 
 	@Test
 	@DisplayName("status reads are served from the shared cache, not the database")
-	void accountStatusIsServedFromRedis() {
+	void statusIsServedFromTheSharedCache() {
 		String email = "cafe1@freshlink.com";
 
-		// Warm the shared cache.
 		assertThat(accountStatusService.isUsable(email)).isTrue();
-		assertThat(cacheManager.getCache(AccountStatusService.CACHE).get(email))
+		assertThat(accountStatusCache.get(email))
 				.as("the answer must land in Redis, or every request would hit the database")
-				.isNotNull();
+				.contains(true);
 
 		// Suspend the account behind the service's back. A database read would now
-		// say unusable, so a continued "usable" can only come from the cache -
-		// which is exactly the behaviour that lets a second replica agree with the
-		// first, and what bounds revocation to the cache TTL rather than the token
-		// lifetime.
+		// say unusable, so a continued "usable" can only be coming from Redis.
 		userRepository.findByEmail(email).ifPresent(user -> {
 			user.setActive(false);
 			userRepository.save(user);
@@ -151,7 +146,7 @@ class RedisBackedIT {
 				user.setActive(true);
 				userRepository.save(user);
 			});
-			cacheManager.getCache(AccountStatusService.CACHE).evict(email);
+			accountStatusCache.evict(email);
 		}
 	}
 }
