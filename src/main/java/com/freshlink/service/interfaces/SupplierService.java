@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 
 import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.deliverydto.DeliveryUpdateRequest;
+import com.freshlink.enums.OrderStatus;
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.routedto.RouteCreateRequest;
@@ -24,7 +25,7 @@ import com.freshlink.userprofiledto.SupplierProfileResponse;
 public interface SupplierService {
 		FishResponse addFish(FishCreateRequest dto, String supplierEmail);
 
-	    List<FishResponse> getMyFish(String supplierEmail);
+	    Page<FishResponse> getMyFish(String supplierEmail, Pageable pageable);
 
 	    FishResponse updateFish(Long id, FishUpdateRequest dto, String supplierEmail);
 
@@ -34,7 +35,8 @@ public interface SupplierService {
 
 		OrderResponse acceptOrder(Long orderId, String supplierEmail);
 
-		Page<OrderResponse> getIncomingOrders(String supplierEmail, Pageable pageable);
+		/** {@code status} is optional; null returns every order. */
+		Page<OrderResponse> getIncomingOrders(String supplierEmail, OrderStatus status, Pageable pageable);
 
 		void rejectOrder(Long orderId, String supplierEmail);
 
@@ -58,6 +60,12 @@ public interface SupplierService {
 	/** Dispatching moves every stop onto the road and stamps the driver on each. */
 	RouteResponse updateRouteStatus(Long routeId, RouteStatusUpdateRequest dto, String supplierEmail);
 
+	/** Adds one drop-off to a route that is still being planned. */
+	RouteResponse addStop(Long routeId, Long orderId, String supplierEmail);
+
+	/** Takes a drop-off off a route. The delivery survives, unassigned. */
+	RouteResponse removeStop(Long routeId, Long orderId, String supplierEmail);
+
 	/** Only while still planned. Deletes the route, never its deliveries. */
 	void deleteRoute(Long routeId, String supplierEmail);
 
@@ -72,7 +80,7 @@ public interface SupplierService {
 
 	DailySupplyResponse addDailySupply(DailySupplyCreateRequest dto, String supplierEmail);
 
-	List<DailySupplyResponse> getMyDailySupply(String supplierEmail);
+	Page<DailySupplyResponse> getMyDailySupply(String supplierEmail, Pageable pageable);
 
 	DailySupplyResponse updateDailySupply(Long id, DailySupplyUpdateRequest dto, String supplierEmail);
 

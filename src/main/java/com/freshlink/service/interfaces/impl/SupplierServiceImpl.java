@@ -114,13 +114,11 @@ public class SupplierServiceImpl implements SupplierService{
         return fishMapper.toFishResponse(saved);
 	}
 	@Override
-	public List<FishResponse> getMyFish(String supplierEmail) {
+	public Page<FishResponse> getMyFish(String supplierEmail, Pageable pageable) {
 		 Supplier supplier = supplierRepository.findByEmail(supplierEmail)
 	                .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
-	        return fishRepository.findBySupplier(supplier)
-	                .stream()
-	                .map(fishMapper::toFishResponse) 
-	                .collect(Collectors.toList());
+	        return fishRepository.findBySupplier(supplier, pageable)
+	                .map(fishMapper::toFishResponse);
 	}
 	@Override
 	public FishResponse updateFish(Long id, FishUpdateRequest dto, String supplierEmail) {
@@ -203,11 +201,17 @@ public class SupplierServiceImpl implements SupplierService{
 		
 	}
 	@Override
-	public Page<OrderResponse> getIncomingOrders(String supplierEmail, Pageable pageable) {
+	public Page<OrderResponse> getIncomingOrders(String supplierEmail, OrderStatus status, Pageable pageable) {
 		 Supplier supplier = supplierRepository.findByEmail(supplierEmail)
 		            .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
-		 return orderRepository.findBySupplier(supplier, pageable)
-				 .map(orderMapper::toOrderResponse);
+
+		 // A supplier's working view is "what needs my attention", which is a status
+		 // filter, not page 4 of everything they have ever sold.
+		 Page<Order> orders = status == null
+				 ? orderRepository.findBySupplier(supplier, pageable)
+				 : orderRepository.findBySupplierAndStatus(supplier, status, pageable);
+
+		 return orders.map(orderMapper::toOrderResponse);
 	}
 	@Override
 	public void rejectOrder(Long orderId, String supplierEmail) {
@@ -393,6 +397,72 @@ public class SupplierServiceImpl implements SupplierService{
 
 		route.setStatus(target);
 		return toRouteResponse(deliveryRouteRepository.save(route));
+	}
+
+	@Override
+	public RouteResponse addStop(Long routeId, Long orderId, String supplierEmail) {
+		DeliveryRoute route = requireOwnRoute(routeId, supplierEmail);
+
+		// Only while planning. Adding a drop to a van that has already left means
+		// the driver is not carrying it.
+		if (route.getStatus() != RouteStatus.PLANNED) {
+			throw new BusinessRuleException(
+					"Stops can only be added while the route is still being planned");
+		}
+
+		Delivery delivery = requireRoutableDelivery(orderId, route);
+		delivery.setRoute(route);
+		deliveryRepository.save(delivery);
+
+		return toRouteResponse(route);
+	}
+
+	@Override
+	public RouteResponse removeStop(Long routeId, Long orderId, String supplierEmail) {
+		DeliveryRoute route = requireOwnRoute(routeId, supplierEmail);
+
+		if (route.getStatus() == RouteStatus.COMPLETED || route.getStatus() == RouteStatus.CANCELLED) {
+			throw new BusinessRuleException(
+					"This route is already %s and cannot be changed".formatted(route.getStatus()));
+		}
+
+		Delivery delivery = deliveryRepository.findByRoute(route).stream()
+				.filter(d -> d.getOrder().getId().equals(orderId))
+				.findFirst()
+				.orElseThrow(() -> new ResourceNotFoundException("Order on this route", orderId));
+
+		if (delivery.getStatus() == DeliveryStatus.DELIVERED) {
+			throw new BusinessRuleException(
+					"Order %d has already been delivered on this route".formatted(orderId));
+		}
+
+		// Detached, not deleted - the delivery still has to happen.
+		delivery.setRoute(null);
+		deliveryRepository.save(delivery);
+
+		return toRouteResponse(route);
+	}
+
+	/** A delivery that exists, belongs to this supplier, and is free to be routed. */
+	private Delivery requireRoutableDelivery(Long orderId, DeliveryRoute route) {
+		Order order = orderRepository.findById(orderId)
+				.filter(o -> o.getSupplier().getId().equals(route.getSupplier().getId()))
+				.orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+
+		Delivery delivery = deliveryRepository.findByOrder(order)
+				.orElseThrow(() -> new BusinessRuleException(
+						"Order %d is not out for delivery yet, so it cannot be routed."
+								.formatted(orderId)));
+
+		if (delivery.getRoute() != null && !delivery.getRoute().getId().equals(route.getId())) {
+			throw new BusinessRuleException(
+					"Order %d is already on route %d. Remove it from that route first."
+							.formatted(orderId, delivery.getRoute().getId()));
+		}
+		if (delivery.getStatus() == DeliveryStatus.DELIVERED) {
+			throw new BusinessRuleException("Order %d has already been delivered.".formatted(orderId));
+		}
+		return delivery;
 	}
 
 	@Override
@@ -642,14 +712,12 @@ public class SupplierServiceImpl implements SupplierService{
 	}
 
 	@Override
-	public List<DailySupplyResponse> getMyDailySupply(String supplierEmail) {
+	public Page<DailySupplyResponse> getMyDailySupply(String supplierEmail, Pageable pageable) {
 		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
 				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 
-		return dailySupplyRepository.findBySupplierOrderByCatchDateTimeDesc(supplier)
-				.stream()
-				.map(this::toDailySupplyResponse)
-				.collect(Collectors.toList());
+		return dailySupplyRepository.findBySupplierOrderByCatchDateTimeDesc(supplier, pageable)
+				.map(this::toDailySupplyResponse);
 	}
 
 	@Override

@@ -3,6 +3,7 @@ package com.freshlink.service.interfaces;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import com.freshlink.enums.OrderStatus;
 import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.fishdto.FishMarketResponse;
@@ -18,7 +19,8 @@ public interface CafeService {
 
 	OrderResponse placeOrder(OrderCreateRequest dto, String email);
 
-	Page<OrderResponse> getOrders(String email, Pageable pageable);
+	/** {@code status} is optional; null returns every order. */
+	Page<OrderResponse> getOrders(String email, OrderStatus status, Pageable pageable);
 
 	void cancelOrder(Long orderId, String cafeEmail);
 

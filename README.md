@@ -160,11 +160,11 @@ New accounts are created inactive and require **both** email verification and ad
 | :--- | :--- | :--- |
 | `GET` | `/suppliers/me` | Current supplier profile |
 | `POST` | `/suppliers/fish` | Add a fish listing |
-| `GET` | `/suppliers/fish` | List own listings |
+| `GET` | `/suppliers/fish` | List own listings (paged) |
 | `PUT` | `/suppliers/fish/{id}` | Update a listing |
 | `DELETE` | `/suppliers/fish/{id}` | Remove a listing |
 | `GET` | `/suppliers/fish/{id}/price-history` | What this listing has charged over time |
-| `GET` | `/suppliers/orders` | Incoming orders (paged) |
+| `GET` | `/suppliers/orders` | Incoming orders (paged) — optional `?status=REQUESTED` |
 | `PUT` | `/suppliers/orders/{orderId}/accept` | Accept an order |
 | `PUT` | `/suppliers/orders/{orderId}/reject` | Reject an order |
 | `PUT` | `/suppliers/orders/{orderId}/markdelivering` | Mark as out for delivery |
@@ -175,9 +175,11 @@ New accounts are created inactive and require **both** email verification and ad
 | `GET` | `/suppliers/routes` | Own routes (paged) |
 | `GET` | `/suppliers/routes/{routeId}` | Route with its stops |
 | `PUT` | `/suppliers/routes/{routeId}/status` | Dispatch, complete or cancel the whole route |
+| `PUT` | `/suppliers/routes/{routeId}/stops/{orderId}` | Add a stop while still planning |
+| `DELETE` | `/suppliers/routes/{routeId}/stops/{orderId}` | Take a stop off — the delivery survives |
 | `DELETE` | `/suppliers/routes/{routeId}` | Delete while still planned — unassigns stops, never deletes them |
 | `POST` | `/suppliers/daily-supply` | Record today's catch — triggers matching immediately |
-| `GET` | `/suppliers/daily-supply` | List own recorded catch |
+| `GET` | `/suppliers/daily-supply` | List own recorded catch (paged) |
 | `PUT` | `/suppliers/daily-supply/{id}` | Adjust quantity or freshness |
 | `DELETE` | `/suppliers/daily-supply/{id}` | Remove an unmatched entry |
 | `GET` | `/suppliers/supply-matches` | Pending demand matches |
@@ -192,10 +194,11 @@ New accounts are created inactive and require **both** email verification and ad
 | `GET` | `/cafes/market/fish` | Browse the marketplace (paged) — optional `fishType`, `city` filters |
 | `GET` | `/cafes/market/fish/{fishId}/price-history` | Price trend for a listing — judge whether today's offer is fair |
 | `POST` | `/cafes/orders` | Place an order (single supplier per order) |
-| `GET` | `/cafes/orders` | Order history (paged) |
+| `GET` | `/cafes/orders` | Order history (paged) — optional `?status=DELIVERING` |
 | `PUT` | `/cafes/orders/{orderId}/cancel` | Cancel while still pending |
 | `GET` | `/cafes/orders/{orderId}/delivery` | Track the delivery — driver, ETA, status |
 | `POST` | `/cafes/orders/{orderId}/rate` | Rate the supplier after completion, 1–5 |
+| `GET` | `/cafes/ratings` | Ratings this café has left (paged) |
 
 ### Demand — `/demand` · role `CAFE`
 

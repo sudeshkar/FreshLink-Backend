@@ -196,12 +196,15 @@ public class CafeServiceImpl implements CafeService{
 	}
 
 	@Override
-	public Page<OrderResponse> getOrders(String email, Pageable pageable) {
+	public Page<OrderResponse> getOrders(String email, OrderStatus status, Pageable pageable) {
 		Cafe cafe = cafeRepository.findByEmail(email)
 	            .orElseThrow(() -> new ResourceNotFoundException("Cafe", email));
 
-		 return orderRepository.findByCafe(cafe, pageable)
-		            .map(orderMapper::toOrderResponse);
+		 Page<Order> orders = status == null
+				 ? orderRepository.findByCafe(cafe, pageable)
+				 : orderRepository.findByCafeAndStatus(cafe, status, pageable);
+
+		 return orders.map(orderMapper::toOrderResponse);
 	}
 
 	@Override

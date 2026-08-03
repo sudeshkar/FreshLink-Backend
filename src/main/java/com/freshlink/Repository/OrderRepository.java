@@ -23,9 +23,13 @@ public interface OrderRepository extends JpaRepository<Order, Long>{
 
 	Page<Order> findByCafe(Cafe cafe, Pageable pageable);
 
+	Page<Order> findByCafeAndStatus(Cafe cafe, OrderStatus status, Pageable pageable);
+
 	List<Order> findBySupplier(Supplier supplier);
 
 	Page<Order> findBySupplier(Supplier supplier, Pageable pageable);
+
+	Page<Order> findBySupplierAndStatus(Supplier supplier, OrderStatus status, Pageable pageable);
 
 	long countByCafeAndStatusIn(Cafe cafe, List<OrderStatus> statuses);
 

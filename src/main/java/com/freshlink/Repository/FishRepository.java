@@ -17,6 +17,8 @@ import com.freshlink.model.Supplier;
 public interface FishRepository extends JpaRepository<Fish, Long>{
 	 	List<Fish> findBySupplier(Supplier supplier);
 
+	 	Page<Fish> findBySupplier(Supplier supplier, Pageable pageable);
+
 	    // Find by FishType name
 	    List<Fish> findByFishType_Name(String name);
 

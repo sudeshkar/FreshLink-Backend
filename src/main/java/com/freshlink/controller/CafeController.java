@@ -18,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.fishdto.PriceHistoryResponse;
+import com.freshlink.enums.OrderStatus;
 import com.freshlink.fishdto.FishMarketResponse;
 import com.freshlink.orderdto.OrderCreateRequest;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.rating.dto.RatingResponse;
 import com.freshlink.rating.dto.RatingRequest;
 import com.freshlink.service.interfaces.CafeService;
 import com.freshlink.service.interfaces.RatingService;
@@ -61,8 +63,15 @@ public class CafeController {
 
 	    @GetMapping("/orders")
 	    public Page<OrderResponse> myOrders(Authentication auth,
+	            @RequestParam(required = false) OrderStatus status,
 	            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-	        return cafeService.getOrders(auth.getName(), pageable);
+	        return cafeService.getOrders(auth.getName(), status, pageable);
+	    }
+
+	    @GetMapping("/ratings")
+	    public Page<RatingResponse> myRatings(Authentication auth,
+	            @PageableDefault(size = 20) Pageable pageable) {
+	        return ratingService.getMyRatings(auth.getName(), pageable);
 	    }
 	    
 	    @PutMapping("/orders/{orderId}/cancel")

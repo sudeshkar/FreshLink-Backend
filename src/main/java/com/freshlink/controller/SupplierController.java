@@ -13,11 +13,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.deliverydto.DeliveryUpdateRequest;
+import com.freshlink.enums.OrderStatus;
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.fishdto.FishResponse;
@@ -59,8 +61,9 @@ public class SupplierController {
     }
 
     @GetMapping("/fish")
-    public List<FishResponse> getMyFish(Authentication auth) {
-        return supplierService.getMyFish(auth.getName());
+    public Page<FishResponse> getMyFish(Authentication auth,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return supplierService.getMyFish(auth.getName(), pageable);
     }
 
     @PutMapping("/fish/{id}")
@@ -82,9 +85,12 @@ public class SupplierController {
     }
     
     @GetMapping("/orders")
+    @Operation(summary = "Incoming orders",
+            description = "Optionally filter by status, e.g. ?status=REQUESTED for orders awaiting your response.")
     public Page<OrderResponse> getIncomingOrders(Authentication auth,
+            @RequestParam(required = false) OrderStatus status,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable){
-    	return supplierService.getIncomingOrders(auth.getName(), pageable);
+    	return supplierService.getIncomingOrders(auth.getName(), status, pageable);
     }
     
     @PutMapping("/orders/{orderId}/reject")
@@ -133,6 +139,21 @@ public class SupplierController {
         return supplierService.updateRouteStatus(routeId, dto, auth.getName());
     }
 
+    @Operation(summary = "Add a stop to a planned route")
+    @PutMapping("/routes/{routeId}/stops/{orderId}")
+    public RouteResponse addStop(@PathVariable Long routeId, @PathVariable Long orderId,
+            Authentication auth) {
+        return supplierService.addStop(routeId, orderId, auth.getName());
+    }
+
+    @Operation(summary = "Take a stop off a route",
+            description = "The delivery itself survives and can be put on another route.")
+    @DeleteMapping("/routes/{routeId}/stops/{orderId}")
+    public RouteResponse removeStop(@PathVariable Long routeId, @PathVariable Long orderId,
+            Authentication auth) {
+        return supplierService.removeStop(routeId, orderId, auth.getName());
+    }
+
     @DeleteMapping("/routes/{routeId}")
     public void deleteRoute(@PathVariable Long routeId, Authentication auth) {
         supplierService.deleteRoute(routeId, auth.getName());
@@ -177,8 +198,9 @@ public class SupplierController {
     }
 
     @GetMapping("/daily-supply")
-    public List<DailySupplyResponse> myDailySupply(Authentication auth) {
-        return supplierService.getMyDailySupply(auth.getName());
+    public Page<DailySupplyResponse> myDailySupply(Authentication auth,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return supplierService.getMyDailySupply(auth.getName(), pageable);
     }
 
     @PutMapping("/daily-supply/{id}")

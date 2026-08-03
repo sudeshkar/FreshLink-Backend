@@ -8,12 +8,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.freshlink.exception.ResourceNotFoundException;
 import com.freshlink.exception.BusinessRuleException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import com.freshlink.Repository.CafeRepository;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.Repository.RatingRepository;
 import com.freshlink.enums.OrderStatus;
+import com.freshlink.model.Cafe;
 import com.freshlink.model.Order;
 import com.freshlink.model.Rating;
 import com.freshlink.model.Supplier;
+import com.freshlink.rating.dto.RatingResponse;
 import com.freshlink.rating.dto.RatingRequest;
 import com.freshlink.service.interfaces.RatingService;
 
@@ -25,6 +31,7 @@ public class RatingServiceImpl implements RatingService{
 	
 	private final OrderRepository orderRepository;
 	private final RatingRepository ratingRepository;
+	private final CafeRepository cafeRepository;
 
 	@Override
 	public void rateSupplier(Long orderId,RatingRequest ratingRequest,String cafeEmail) {
@@ -57,6 +64,22 @@ public class RatingServiceImpl implements RatingService{
 		    updateSupplierRating(order.getSupplier());
 	}
 	
+	@Override
+	@Transactional(readOnly = true)
+	public Page<RatingResponse> getMyRatings(String cafeEmail, Pageable pageable) {
+		Cafe cafe = cafeRepository.findByEmail(cafeEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Cafe", cafeEmail));
+
+		return ratingRepository.findByCafeOrderByCreatedAtDesc(cafe, pageable)
+				.map(r -> new RatingResponse(
+						r.getId(),
+						r.getOrder().getId(),
+						r.getSupplier().getName(),
+						r.getScore(),
+						r.getComment(),
+						r.getCreatedAt()));
+	}
+
 	private void updateSupplierRating(Supplier supplier) {
 
 	    List<Rating> ratings =
