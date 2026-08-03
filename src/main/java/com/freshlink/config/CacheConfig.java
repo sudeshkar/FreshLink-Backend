@@ -49,7 +49,10 @@ public class CacheConfig {
 	 * Shared caches, so every instance sees the same answer. Entries carry a real
 	 * TTL here, which is both simpler and more accurate than a periodic sweep.
 	 */
-	@Bean
+	// Named "cacheManager" like the in-process one: the two are mutually
+	// exclusive by condition, and the caching interceptor resolves the manager by
+	// that conventional name.
+	@Bean("cacheManager")
 	@ConditionalOnProperty(name = "app.cache.backend", havingValue = "redis")
 	public CacheManager redisCacheManager(RedisConnectionFactory connectionFactory) {
 		RedisCacheConfiguration analytics =

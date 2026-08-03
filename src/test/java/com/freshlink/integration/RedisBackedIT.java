@@ -108,6 +108,12 @@ class RedisBackedIT {
 				.as("unknown account, straight from the database")
 				.isFalse();
 
+		assertThat(cacheManager.getCache(AccountStatusService.CACHE).get(stranger))
+				.as("@Cacheable must actually populate the shared cache - if this is "
+						+ "null the annotation is not being applied and every request "
+						+ "would hit the database")
+				.isNotNull();
+
 		cacheManager.getCache(AccountStatusService.CACHE).put(stranger, true);
 
 		assertThat(accountStatusService.isUsable(stranger))
