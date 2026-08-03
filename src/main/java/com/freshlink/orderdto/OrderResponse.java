@@ -9,7 +9,11 @@ public record OrderResponse(
 	        List<OrderItemResponse> items,
 	        double totalAmount,
 	        String status,
-	        String createdAt
+	        String createdAt,
+	        String SupplierName,
+	        String SupplierEmail,
+	        String SupplierContact
+	        
 		) {
 
 }

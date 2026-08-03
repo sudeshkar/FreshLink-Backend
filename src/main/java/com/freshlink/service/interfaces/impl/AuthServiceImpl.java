@@ -69,11 +69,13 @@ public class AuthServiceImpl implements AuthService{
 	public AuthResponseDto refresh(RefreshTokenRequestDto dto) {
 		String newAccessToken =
                 refreshTokenService.refreshAccessToken(dto.refreshToken());
+		
+		String role =refreshTokenService.getRoleByRefreshToken(dto.refreshToken());
 
         return new AuthResponseDto(
                 newAccessToken,
                 dto.refreshToken(),
-                null 
+                role
         );
 	}
 
@@ -98,7 +100,8 @@ public class AuthServiceImpl implements AuthService{
 	    cafe.setEmail(dto.email());
 	    cafe.setPhone(dto.phone());
 	    cafe.setPasswordHash(passwordEncoder.encode(dto.password()));
-	    cafe.setActive(false);  
+	    cafe.setActive(false); 
+	    cafe.setEmailVerified(false);
 	    cafe.setAddress(dto.address());
 	    cafe.setBusinessRegNo(dto.businessRegNo());
 	    userRepository.save(cafe);

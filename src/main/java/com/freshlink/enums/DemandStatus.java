@@ -1,7 +1,9 @@
 package com.freshlink.enums;
 
 public enum DemandStatus {
-	PENDING,
-    MATCHED,
+	OPEN,           // created, waiting for matching
+    PARTIALLY_MATCHED,
+    FULLY_MATCHED,  // enough supply matched (but not accepted yet)
+    FULFILLED,      // delivery completed
     CANCELLED
 }

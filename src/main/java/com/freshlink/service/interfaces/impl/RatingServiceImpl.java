@@ -25,10 +25,10 @@ public class RatingServiceImpl implements RatingService{
 	private final RatingRepository ratingRepository;
 
 	@Override
-	public void rateSupplier(Long orderId,RatingRequest ratingRequest) {
+	public void rateSupplier(Long orderId,RatingRequest ratingRequest,String cafeEmail) {
 		Order order = orderRepository.findById(orderId)
 	            .orElseThrow(() -> new RuntimeException("Order not found"));
-		if (!order.getCafe().getEmail().equals(ratingRequest.cafeEmail())) {
+		if (!order.getCafe().getEmail().equals(cafeEmail)) {
 	        throw new RuntimeException("Unauthorized");
 	    }
 		

@@ -13,8 +13,10 @@ import com.freshlink.authdto.LoginRequestDto;
 import com.freshlink.authdto.RefreshTokenRequestDto;
 import com.freshlink.authdto.SupplierRegisterRequest;
 import com.freshlink.authdto.VerifyOtpRequest;
+import com.freshlink.otpdto.RequestOtpDto;
 import com.freshlink.service.interfaces.AuthService;
 import com.freshlink.service.interfaces.OtpService;
+import com.freshlink.service.interfaces.VerifyUserService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,6 +27,7 @@ public class AuthController {
 	
 	private final AuthService authService;
 	private final OtpService otpService;
+	private final VerifyUserService verifyUserService;
      
     
     @PostMapping("/login")
@@ -60,15 +63,17 @@ public class AuthController {
     
     @PostMapping("/verify-otp")
     public String verifyOtp(@RequestBody VerifyOtpRequest dto) {
-    	
+    	verifyUserService.verifyUser(dto.email());
     	otpService.verifyOtp(dto.email(), dto.otp());
     	return "OTP Verified";
     	
     }
     
     @PostMapping("/request-otp")
-	public String requestOtp(@RequestBody String email) {
-	    otpService.sendOtp(email);
+	public String requestOtp(@RequestBody RequestOtpDto dto) {
+    	
+    	verifyUserService.verifyUser(dto.email());
+	    otpService.sendOtp(dto.email());
 	    
 	    return "OTP sent to email";
 	}

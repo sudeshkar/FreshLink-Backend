@@ -2,7 +2,11 @@ package com.freshlink.model;
 
 import java.time.LocalDateTime;
 
+import com.freshlink.enums.SupplyStatus;
+
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -31,6 +35,9 @@ public class DailySupply {
     private Double quantity;
 
     private LocalDateTime catchDateTime;
+    
+    @Enumerated(EnumType.STRING)
+    private SupplyStatus status; 
 
     private Double freshnessScore;
 }

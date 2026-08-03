@@ -1,7 +1,8 @@
 package com.freshlink.enums;
 
 public enum MatchStatus {
-	PENDING,
-    CONFIRMED,
-    REJECTED
+	PENDING,    // waiting supplier decision
+    ACCEPTED,
+    REJECTED,
+    EXPIRED
 }

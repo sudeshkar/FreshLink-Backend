@@ -31,7 +31,11 @@ public class OrderMapper {
             itemResponses,
             totalAmount,
             order.getStatus().name(),
-            order.getCreatedAt().toString()
+            order.getCreatedAt().toString(),
+            order.getSupplier().getName(),
+            order.getSupplier().getEmail(),
+            order.getSupplier().getPhone()
+            
         );
     }
 

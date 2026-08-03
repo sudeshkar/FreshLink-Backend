@@ -9,7 +9,6 @@ import com.freshlink.model.User;
 import com.freshlink.security.UserPrincipal;
 import com.freshlink.service.interfaces.UserService;
 
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
