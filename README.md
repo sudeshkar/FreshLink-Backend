@@ -18,11 +18,12 @@
 ## Contents
 
 - [The Problem](#the-problem) · [Features](#features) · [Architecture](#architecture) · [Data Model](#data-model)
-- [API Reference](#api-reference) · [Order Lifecycle](#order-lifecycle) · [Delivery](#delivery) · [Demand Matching](#demand-matching)
+- [API Reference](#api-reference) · [Order Lifecycle](#order-lifecycle) · [Delivery](#delivery) · [Routes](#routes) · [Demand Matching](#demand-matching)
 - [Getting Started](#getting-started) · [API Documentation](#api-documentation) · [Running with Docker](#running-with-docker)
 - [Security](#security) · [Testing](#testing) · [Continuous Integration](#continuous-integration)
 - [Configuration](#configuration) · [Database Migrations](#database-migrations) · [Error Responses](#error-responses)
-- [Tech Stack](#tech-stack) · [Roadmap](#roadmap) · [Author](#author)
+- [Notes for anyone extending this](#notes-for-anyone-extending-this) · [Tech Stack](#tech-stack)
+- [Roadmap](#roadmap) · [Author](#author)
 
 ---
 
@@ -645,22 +646,35 @@ The committed profile files contain only `${ENV_VAR}` references, which is why t
 
 ### Production environment variables
 
+**Required** — the `prod` profile has no fallbacks, so a missing one fails startup rather
+than silently running on a development value.
+
 | Variable | Notes |
 | :--- | :--- |
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Database connection |
-| `JWT_SECRET` | **Minimum 32 bytes.** HS256 rejects anything shorter, and startup fails with an explicit message. |
+| `JWT_SECRET` | **Minimum 32 bytes.** HS256 rejects anything shorter and startup fails with an explicit message. |
 | `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP credentials |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins |
-| `RATELIMIT_LOGIN_CAPACITY` | Sign-in attempts per window (default 5) |
-| `RATELIMIT_LOGIN_WINDOW` | Window in minutes (default 15) |
-| `RATELIMIT_OTP_CAPACITY` | OTP requests per window (default 3) |
-| `RATELIMIT_OTP_WINDOW` | Window in minutes (default 15) |
-| `MATCH_PENDING_TIMEOUT_HOURS` | How long a supplier has to answer a match (default 24) |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap admin — omit to skip creation |
-| `NOTIFICATIONS_ENABLED` | Set `false` to suppress outbound email |
-| `RATELIMIT_BACKEND` | `memory` (default) or `redis` — shared buckets across instances |
-| `CACHE_BACKEND` | `simple` (default) or `redis` — shared caches across instances |
-| `REDIS_HOST`, `REDIS_PORT`, `REDIS_ENABLED` | Only needed when either backend is `redis` |
+
+**Optional**
+
+| Variable | Default | Notes |
+| :--- | :--- | :--- |
+| `SPRING_PROFILES_ACTIVE` | `dev` | `prod` for anything deployed |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated |
+| `DB_POOL_SIZE` | `10` | Hikari maximum pool size |
+| `JWT_EXPIRATION` | `300000` | Access token lifetime, milliseconds |
+| `JWT_REFRESH_EXPIRATION_DAYS` | `7` | Refresh token lifetime |
+| `MAIL_HOST`, `MAIL_PORT` | `smtp.gmail.com`, `587` | SMTP endpoint |
+| `NOTIFICATIONS_ENABLED` | `true` | `false` suppresses outbound email |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | — | Bootstrap admin; omit and none is created |
+| `RATELIMIT_ENABLED` | `true` | `false` disables the limiter entirely |
+| `RATELIMIT_LOGIN_CAPACITY`, `RATELIMIT_LOGIN_WINDOW` | `5`, `15` | Sign-in attempts per window; window in minutes |
+| `RATELIMIT_OTP_CAPACITY`, `RATELIMIT_OTP_WINDOW` | `3`, `15` | OTP requests per window; window in minutes |
+| `MATCH_PENDING_TIMEOUT_HOURS` | `24` | How long a supplier has to answer a match before its claim is released |
+| `RATELIMIT_BACKEND` | `memory` | `redis` shares buckets across instances |
+| `CACHE_BACKEND` | `simple` | `redis` shares caches across instances |
+| `REDIS_HOST`, `REDIS_PORT` | `localhost`, `6379` | Only read when a backend is `redis` |
+| `REDIS_ENABLED` | `false` | Include Redis in the health check |
 
 ```bash
 java -jar target/freshlink-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
@@ -747,6 +761,52 @@ Every failure returns a consistent body:
 
 ---
 
+## Notes for anyone extending this
+
+Things that cost real time to find, recorded so they only cost it once.
+
+**Spring Boot 4 splits auto-configuration into per-technology modules.** `flyway-core` on its
+own gives you the library and no wiring — you need `spring-boot-flyway`. The same
+reorganisation moved `@AutoConfigureMockMvc` to
+`org.springframework.boot.webmvc.test.autoconfigure`. If something is on the classpath but
+inert, suspect a missing module before suspecting your config.
+
+**Schema identifiers are `snake_case`, not camelCase.** Spring applies
+`CamelCaseToUnderscoresNamingStrategy`. DDL generated *outside* Spring uses Hibernate's raw
+strategy and produces camelCase, so every column name will be subtly wrong and `validate`
+will reject it. Generate migrations from a running app, not from a standalone tool.
+
+**`mvn test` does not run the integration tests.** Surefire collects `*Test`; `*IT` belongs to
+Failsafe. Without Failsafe configured they sit in the repo executing never, while the build
+reports green. Use `mvn verify`.
+
+**`LOWER(:param)` with a null bind breaks on PostgreSQL.** It cannot infer the type and
+resolves `lower(bytea)`, which does not exist. Lower-case the value in Java and compare
+against the column instead. This broke the default market browse for every unfiltered
+request and no unit test could catch it — they all mock the repository.
+
+**`@Transactional` rolls back on `RuntimeException`, including deliberate ones.** Code that
+revokes something and then throws will have the revocation rolled back by its own throw, and
+the caller sees a perfectly convincing error while nothing was actually revoked. Use
+`noRollbackFor` where the write must survive.
+
+**Filters annotated `@Component` register twice** — once by servlet auto-registration, once
+in the security chain. Harmless for a filter that only reads, fatal for one that consumes a
+token: it halves every rate limit. Disable auto-registration with a `FilterRegistrationBean`.
+
+**Set a `TaskDecorator` before `initialize()`**, or the pool is built without it and MDC
+context silently never reaches background threads.
+
+**Aggregates need integration tests.** A mocked repository agrees with whatever the code
+expects, so JPQL semantics are unprovable against it. Revenue was reported including
+cancelled and rejected orders for exactly this reason.
+
+**Concurrency tests can pass by accident.** Threads that happen to serialise prove nothing.
+Verify by removing the protection and confirming the test fails — without `@Version`, two
+60 kg orders against 100 kg of stock both succeed.
+
+---
+
 ## Tech Stack
 
 | Layer | Choice |
@@ -756,7 +816,8 @@ Every failure returns a consistent body:
 | Database | PostgreSQL |
 | Migrations | Flyway |
 | Auth | Spring Security + JJWT 0.12, hashed rotating refresh tokens |
-| Rate limiting | Bucket4j, optionally Redis-backed |
+| Rate limiting | Bucket4j — in-process or Redis-backed |
+| Caching | In-process, or Redis for multi-instance |
 | API docs | springdoc-openapi (Swagger UI) |
 | Build | Maven Wrapper, Surefire + Failsafe |
 | Testing | JUnit 5, Mockito, AssertJ, MockMvc |
@@ -768,8 +829,12 @@ Every failure returns a consistent body:
 
 ## Roadmap
 
+Nothing outstanding is a correctness or security concern. What is left is additive:
+
 - [ ] WebSocket or push notifications alongside email
-- [ ] Demand-side analytics for suppliers deciding what to buy at market
+- [ ] Demand-side analytics, so suppliers can see what to buy at market before they buy it
+- [ ] Delivery route optimisation — ordering the stops, not just grouping them
+- [ ] Per-cafe pricing agreements, rather than one market price per listing
 
 ---
 
