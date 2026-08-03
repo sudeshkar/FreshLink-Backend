@@ -2,6 +2,9 @@ package com.freshlink.service.interfaces;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
@@ -25,7 +28,7 @@ public interface SupplierService {
 
 		OrderResponse acceptOrder(Long orderId, String supplierEmail);
 
-		List<OrderResponse> getIncomingOrders(String supplierEmail);
+		Page<OrderResponse> getIncomingOrders(String supplierEmail, Pageable pageable);
 
 		void rejectOrder(Long orderId, String supplierEmail);
 

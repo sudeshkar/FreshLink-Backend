@@ -2,6 +2,9 @@ package com.freshlink.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,10 +43,11 @@ public class CafeController {
 	    }
 
 	    @GetMapping("/market/fish")
-	    public List<FishMarketResponse> browseFish(
+	    public Page<FishMarketResponse> browseFish(
 	            @RequestParam(required = false) String fishType,
-	            @RequestParam(required = false) String city) {
-	        return cafeService.browseFish(fishType, city);
+	            @RequestParam(required = false) String city,
+	            @PageableDefault(size = 20) Pageable pageable) {
+	        return cafeService.browseFish(fishType, city, pageable);
 	    }
 
 	    @PostMapping("/orders")
@@ -54,8 +58,9 @@ public class CafeController {
 	    }
 
 	    @GetMapping("/orders")
-	    public List<OrderResponse> myOrders(Authentication auth) {
-	        return cafeService.getOrders(auth.getName());
+	    public Page<OrderResponse> myOrders(Authentication auth,
+	            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+	        return cafeService.getOrders(auth.getName(), pageable);
 	    }
 	    
 	    @PutMapping("/orders/{orderId}/cancel")

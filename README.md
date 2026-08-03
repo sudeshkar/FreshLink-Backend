@@ -104,7 +104,7 @@ New accounts are created inactive and require **both** email verification and ad
 | `GET` | `/suppliers/fish` | List own listings |
 | `PUT` | `/suppliers/fish/{id}` | Update a listing |
 | `DELETE` | `/suppliers/fish/{id}` | Remove a listing |
-| `GET` | `/suppliers/orders` | Incoming orders |
+| `GET` | `/suppliers/orders` | Incoming orders (paged) |
 | `PUT` | `/suppliers/orders/{orderId}/accept` | Accept an order |
 | `PUT` | `/suppliers/orders/{orderId}/reject` | Reject an order |
 | `PUT` | `/suppliers/orders/{orderId}/markdelivering` | Mark as out for delivery |
@@ -122,9 +122,9 @@ New accounts are created inactive and require **both** email verification and ad
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/cafes/me` | Current café profile |
-| `GET` | `/cafes/market/fish` | Browse the marketplace — optional `fishType`, `city` filters |
+| `GET` | `/cafes/market/fish` | Browse the marketplace (paged) — optional `fishType`, `city` filters |
 | `POST` | `/cafes/orders` | Place an order (single supplier per order) |
-| `GET` | `/cafes/orders` | Order history |
+| `GET` | `/cafes/orders` | Order history (paged) |
 | `PUT` | `/cafes/orders/{orderId}/cancel` | Cancel while still pending |
 | `POST` | `/cafes/orders/{orderId}/rate` | Rate the supplier after completion, 1–5 |
 
@@ -133,19 +133,35 @@ New accounts are created inactive and require **both** email verification and ad
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/demand/create` | Post a forward demand request |
-| `GET` | `/demand` | List own demand |
+| `GET` | `/demand` | List own demand (paged) |
 | `DELETE` | `/demand/{demandId}/delete` | Withdraw a demand request |
 
 ### Admin — `/admin` · role `ADMIN`
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/admin/suppliers` | List all suppliers |
-| `GET` | `/admin/cafes` | List all cafés |
+| `GET` | `/admin/suppliers` | List all suppliers (paged) |
+| `GET` | `/admin/cafes` | List all cafés (paged) |
 | `PUT` | `/admin/users/{id}/activate` | Activate a user account |
 | `DELETE` | `/admin/users/{id}/delete` | Soft-delete an account |
 | `GET` | `/admin/analytics/dashboard` | Revenue, order and demand metrics |
 | `GET` | `/admin/analytics/suppliers` | Supplier performance leaderboard |
+
+---
+
+### Paging
+
+List endpoints take `page`, `size` and `sort` and return a Spring `Page`:
+
+```
+GET /api/v1/cafes/market/fish?page=0&size=20&sort=pricePerKg,asc
+```
+
+```json
+{ "content": [ ... ], "totalElements": 57, "totalPages": 3, "number": 0, "size": 20 }
+```
+
+Default size is 20, capped at 100.
 
 ---
 
@@ -191,7 +207,12 @@ Supplier records daily catch      Café posts demand
             creates order      to the pool
 ```
 
-Matching runs on creation and again every 10 minutes for demand still open or partially filled.
+Matching runs on creation and again every 10 minutes for demand still open or partially filled,
+and only ever allocates the outstanding shortfall.
+
+A pending match reserves part of a supply, so one a supplier never answers is expired after
+24 hours (`MATCH_PENDING_TIMEOUT_HOURS`) and its quantity returns to the pool. Demand whose
+delivery date has passed is closed rather than retried forever.
 
 ---
 
@@ -433,7 +454,7 @@ Every failure returns a consistent body:
 | Migrations | Flyway |
 | Auth | Spring Security + JJWT, persisted refresh tokens |
 | Build | Maven Wrapper |
-| Testing | JUnit 5, Mockito, AssertJ |
+| Testing | JUnit 5, Mockito, AssertJ, MockMvc |
 | Boilerplate | Lombok |
 
 ---
@@ -441,8 +462,6 @@ Every failure returns a consistent body:
 ## Roadmap
 
 - [ ] Delivery assignment and route grouping
-- [ ] Integration test coverage across the order lifecycle
-- [ ] Pagination on list endpoints
 
 ---
 

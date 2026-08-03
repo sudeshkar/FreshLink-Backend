@@ -2,6 +2,9 @@ package com.freshlink.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -73,10 +76,9 @@ public class SupplierController {
     }
     
     @GetMapping("/orders")
-    public List<OrderResponse> getIncomingOrders(Authentication auth){
-    	
-    	return supplierService.getIncomingOrders(auth.getName());
-    	
+    public Page<OrderResponse> getIncomingOrders(Authentication auth,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable){
+    	return supplierService.getIncomingOrders(auth.getName(), pageable);
     }
     
     @PutMapping("/orders/{orderId}/reject")

@@ -151,6 +151,23 @@
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
+			<!--
+				Surefire only picks up *Test, so the *IT classes would silently
+				never run. Failsafe binds them to the integration-test phase, which
+				means `mvn verify` (what CI runs) executes both suites.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

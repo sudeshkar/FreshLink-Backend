@@ -1,5 +1,6 @@
 package com.freshlink.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,5 +17,8 @@ public interface SupplyMatchRepository extends JpaRepository<SupplyMatch, Long>{
 	List<SupplyMatch> findByDemandRequest(DemandRequest demandRequest);
 
 	List<SupplyMatch> findByDailySupply(DailySupply dailySupply);
+
+	/** Pending matches old enough to be considered abandoned by the supplier. */
+	List<SupplyMatch> findByStatusAndCreatedAtBefore(MatchStatus status, LocalDateTime cutoff);
 
 }

@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -173,13 +175,11 @@ public class SupplierServiceImpl implements SupplierService{
 		
 	}
 	@Override
-	public List<OrderResponse> getIncomingOrders(String supplierEmail) {
+	public Page<OrderResponse> getIncomingOrders(String supplierEmail, Pageable pageable) {
 		 Supplier supplier = supplierRepository.findByEmail(supplierEmail)
-		            .orElseThrow(() -> new RuntimeException("Supplier not found"));
-		 return orderRepository.findBySupplier(supplier)
-				 .stream()
-				 .map(orderMapper::toOrderResponse) 
-				 .collect(Collectors.toList());
+		            .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+		 return orderRepository.findBySupplier(supplier, pageable)
+				 .map(orderMapper::toOrderResponse);
 	}
 	@Override
 	public void rejectOrder(Long orderId, String supplierEmail) {

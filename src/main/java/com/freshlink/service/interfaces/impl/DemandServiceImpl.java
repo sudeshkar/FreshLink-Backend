@@ -2,6 +2,8 @@ package com.freshlink.service.interfaces.impl;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -76,10 +78,8 @@ public class DemandServiceImpl implements DemandService{
 
 	@Override
 	@Transactional(readOnly = true)
-	public List<DemandResponse> getDemand(Cafe cafe) {
-		return demandRepository.findByCafe(cafe).stream()
-				.map(this::toResponse)
-				.toList();
+	public Page<DemandResponse> getDemand(Cafe cafe, Pageable pageable) {
+		return demandRepository.findByCafe(cafe, pageable).map(this::toResponse);
 	}
 
 	private DemandResponse toResponse(DemandRequest demandRequest) {

@@ -2,13 +2,16 @@ package com.freshlink.service.interfaces;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.freshlink.admindto.CafeAdminResponse;
 import com.freshlink.admindto.SupplierAdminResponse;
 
 public interface AdminService {
-	List<SupplierAdminResponse> getSuppliers();
+	Page<SupplierAdminResponse> getSuppliers(Pageable pageable);
     
-    List<CafeAdminResponse> getCafes();
+    Page<CafeAdminResponse> getCafes(Pageable pageable);
     
     void activateUser(Long userId);
     

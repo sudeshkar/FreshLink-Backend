@@ -2,6 +2,9 @@ package com.freshlink.service.interfaces;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.freshlink.demand.dto.DemandRequestDto;
 import com.freshlink.demand.dto.DemandResponse;
 import com.freshlink.model.Cafe;
@@ -14,6 +17,6 @@ public interface DemandService {
 	void deleteDemand(Long demandId, Cafe cafe);
 
 	/** Returns only the demand belonging to {@code cafe}. */
-	List<DemandResponse> getDemand(Cafe cafe);
+	Page<DemandResponse> getDemand(Cafe cafe, Pageable pageable);
 
 }

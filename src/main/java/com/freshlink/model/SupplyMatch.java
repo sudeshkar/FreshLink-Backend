@@ -2,6 +2,10 @@ package com.freshlink.model;
 
 
 
+import java.time.LocalDateTime;
+
+import org.hibernate.annotations.CreationTimestamp;
+
 import com.freshlink.enums.MatchStatus;
 
 import jakarta.persistence.Entity;
@@ -33,7 +37,13 @@ public class SupplyMatch {
     private Double confirmedQuantity;
 
     @Enumerated(EnumType.STRING)
-    
     private MatchStatus status;
+
+    /**
+     * Pending matches hold a claim on their supply, so one a supplier never
+     * answers has to be aged out or that quantity is locked away for good.
+     */
+    @CreationTimestamp
+    private LocalDateTime createdAt;
 
 }

@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,19 +40,15 @@ public class AdminServiceImpl implements AdminService {
 			List.of(OrderStatus.REQUESTED, OrderStatus.ACCEPTED, OrderStatus.DELIVERING);
 
 	@Override
-	public List<SupplierAdminResponse> getSuppliers() {
-		 return supplierRepository.findByDeletedAtIsNull()
-	                .stream()
-	                .map(s -> new SupplierAdminResponse(s.getId(), s.getName(), s.getEmail(), s.isActive(), s.getPhone()))
-	                .collect(Collectors.toList());
+	public Page<SupplierAdminResponse> getSuppliers(Pageable pageable) {
+		 return supplierRepository.findByDeletedAtIsNull(pageable)
+	                .map(s -> new SupplierAdminResponse(s.getId(), s.getName(), s.getEmail(), s.isActive(), s.getPhone()));
 	}
 
 	@Override
-	public List<CafeAdminResponse> getCafes() {
-		return cafeRepository.findByDeletedAtIsNull()
-                .stream()
-                .map(c -> new CafeAdminResponse(c.getId(), c.getName(), c.getEmail(), c.isActive(), c.getPhone()))
-                .collect(Collectors.toList());
+	public Page<CafeAdminResponse> getCafes(Pageable pageable) {
+		return cafeRepository.findByDeletedAtIsNull(pageable)
+                .map(c -> new CafeAdminResponse(c.getId(), c.getName(), c.getEmail(), c.isActive(), c.getPhone()));
 	}
 
 	@Override

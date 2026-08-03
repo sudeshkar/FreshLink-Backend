@@ -2,6 +2,9 @@ package com.freshlink.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -45,8 +48,9 @@ public class DemandController {
 	}
 
 	@GetMapping
-	public List<DemandResponse> getMyDemand(Authentication auth){
-		return demandService.getDemand(currentCafe(auth));
+	public Page<DemandResponse> getMyDemand(Authentication auth,
+			@PageableDefault(size = 20, sort = "requiredDate") Pageable pageable){
+		return demandService.getDemand(currentCafe(auth), pageable);
 	}
 
 	/** The cafe behind the bearer token - every operation here is scoped to it. */

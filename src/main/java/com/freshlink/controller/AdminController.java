@@ -2,6 +2,9 @@ package com.freshlink.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,13 +31,15 @@ public class AdminController {
 	private final AdminService adminService;
 
     @GetMapping("/suppliers")
-    public List<SupplierAdminResponse> getAllSuppliers() {
-        return adminService.getSuppliers();
+    public Page<SupplierAdminResponse> getAllSuppliers(
+            @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        return adminService.getSuppliers(pageable);
     }
 
     @GetMapping("/cafes")
-    public List<CafeAdminResponse> getAllCafes() {
-        return adminService.getCafes();
+    public Page<CafeAdminResponse> getAllCafes(
+            @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        return adminService.getCafes(pageable);
     }
 
     @PutMapping("/users/{id}/activate")

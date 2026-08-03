@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,16 +49,17 @@ public class CafeServiceImpl implements CafeService{
 	}
 
 	@Override
-	public List<FishMarketResponse> browseFish(String fishType, String city) {
-		return fishRepository.searchMarket(blankToNull(fishType), blankToNull(city))
-				.stream()
-				.map(fishMapper::toFishMarket)
-				.collect(Collectors.toList());
+	public Page<FishMarketResponse> browseFish(String fishType, String city, Pageable pageable) {
+		return fishRepository.searchMarket(normaliseFilter(fishType), normaliseFilter(city), pageable)
+				.map(fishMapper::toFishMarket);
 	}
 
-	/** An omitted filter and an empty one mean the same thing to the caller. */
-	private String blankToNull(String value) {
-		return (value == null || value.isBlank()) ? null : value;
+	/**
+	 * An omitted filter and an empty one mean the same thing to the caller.
+	 * Lower-casing happens here rather than in the query - see searchMarket for why.
+	 */
+	private String normaliseFilter(String value) {
+		return (value == null || value.isBlank()) ? null : value.trim().toLowerCase();
 	}
 
 	@Override
@@ -132,14 +135,12 @@ public class CafeServiceImpl implements CafeService{
 	}
 
 	@Override
-	public List<OrderResponse> getOrders(String email) {
+	public Page<OrderResponse> getOrders(String email, Pageable pageable) {
 		Cafe cafe = cafeRepository.findByEmail(email)
-	            .orElseThrow(() -> new RuntimeException("Cafe not found"));
-		
-		 return orderRepository.findByCafe(cafe)
-		            .stream()
-		            .map(orderMapper::toOrderResponse)
-		            .collect(Collectors.toList());
+	            .orElseThrow(() -> new ResourceNotFoundException("Cafe", email));
+
+		 return orderRepository.findByCafe(cafe, pageable)
+		            .map(orderMapper::toOrderResponse);
 	}
 
 	@Override
