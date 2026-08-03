@@ -48,4 +48,23 @@ public interface FishRepository extends JpaRepository<Fish, Long>{
 		boolean existsBySupplierAndFishType(Supplier supplier, FishType fishType);
 
 		Optional<Fish> findBySupplierAndFishType(Supplier supplier, FishType fishType);
+
+	    /**
+	     * Market-wide price spread per fish type. Excludes suspended and removed
+	     * suppliers for the same reason browsing does: their prices are not
+	     * obtainable, so including them would misreport what the market costs.
+	     */
+	    @Query("""
+	        SELECT ft.id, ft.name,
+	               MIN(f.pricePerKg), MAX(f.pricePerKg), AVG(f.pricePerKg),
+	               COUNT(f), COALESCE(SUM(f.availableKg), 0),
+	               ft.seasonStart, ft.seasonEnd
+	        FROM Fish f
+	        JOIN f.fishType ft
+	        WHERE f.supplier.deletedAt IS NULL
+	          AND f.supplier.active = true
+	        GROUP BY ft.id, ft.name, ft.seasonStart, ft.seasonEnd
+	        ORDER BY ft.name
+	    """)
+	    List<Object[]> findMarketPriceSummary();
 }

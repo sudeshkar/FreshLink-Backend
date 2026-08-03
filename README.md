@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Spring%20Security-JWT-6DB33F?style=flat-square&logo=springsecurity&logoColor=white" alt="Spring Security"/>
   <img src="https://img.shields.io/badge/Swagger-85EA2D?style=flat-square&logo=swagger&logoColor=black" alt="Swagger"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
-  <img src="https://img.shields.io/badge/tests-88%20passing-brightgreen?style=flat-square" alt="88 tests"/>
+  <img src="https://img.shields.io/badge/tests-93%20passing-brightgreen?style=flat-square" alt="93 tests"/>
 </p>
 
 ---
@@ -49,7 +49,7 @@ It runs two complementary trade flows:
 - **Demand matching engine** — greedy allocation ranked by freshness, then supplier rating, then catch time. Re-runs every 10 minutes, allocates only the outstanding shortfall, and expires matches a supplier never answers so their supply returns to the pool.
 - **Delivery routes** — one driver, one trip, several drop-offs. Dispatching stamps the driver on every stop and puts them all on the road in one call.
 - **Delivery tracking** — driver, phone, ETA and arrival time per order, with validated status transitions. Cafés can see where their fish is.
-- **Price history** — every price a listing has charged, recorded on creation and on each change, so cafés can judge an offer and seasonal movement is visible.
+- **Price history and market analytics** — every price a listing has charged, plus the market-wide spread and daily trend per fish type, so cafés can judge an offer and suppliers can price against the market.
 - **Post-delivery ratings** — cafés rate suppliers once an order completes, feeding both the leaderboard and the matching engine's ranking.
 
 **Platform**
@@ -199,6 +199,16 @@ New accounts are created inactive and require **both** email verification and ad
 | `GET` | `/cafes/orders/{orderId}/delivery` | Track the delivery — driver, ETA, status |
 | `POST` | `/cafes/orders/{orderId}/rate` | Rate the supplier after completion, 1–5 |
 | `GET` | `/cafes/ratings` | Ratings this café has left (paged) |
+
+### Market — `/market` · roles `CAFE` and `SUPPLIER`
+
+Open to both trading sides: the same numbers answer *is this offer fair* for a café
+and *am I priced competitively* for a supplier.
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/market/price-summary` | Lowest, highest and average price per fish type across every live listing, with listing count, total available, and whether it is in season |
+| `GET` | `/market/fish-types/{fishTypeId}/price-trend?days=30` | Daily market average over the window. A day with no point means nobody changed their price. |
 
 ### Demand — `/demand` · role `CAFE`
 
@@ -534,7 +544,7 @@ still traceable to the request that caused it.
 
 ## Testing
 
-**88 tests** — 78 unit, 10 integration. All of them run on every push.
+**93 tests** — 78 unit, 15 integration. All of them run on every push.
 
 ```bash
 ./mvnw test      # unit tests only (fast, no database needed for most)
@@ -576,6 +586,7 @@ found it, because they all mock the repository.
 - **`OrderLifecycleIT`** — order → accept → deliver → complete → rate, plus double-rating, cancelling a completed order, over-ordering, and paging shape.
 - **`ConcurrentOrderIT`** — genuine concurrent transactions fired from a latch, proving the optimistic lock on stock.
 - **`RevenueAccountingIT`** — revenue is recognised only on completion. JPQL semantics cannot be proven against a mocked repository, so this runs the real query.
+- **`MarketAnalyticsIT`** — the market spread and price trend, for the same reason: aggregates are only meaningful against a real database.
 
 ### On the concurrency tests
 
@@ -747,8 +758,7 @@ Every failure returns a consistent body:
 - [ ] Shared-store rate limiting (`bucket4j-redis`) before running more than one instance
 - [ ] Shared account-status cache, for the same reason
 - [ ] WebSocket or push notifications alongside email
-- [ ] Market-wide price analytics per fish type, not just per listing
-- [ ] Richer demand analytics for suppliers deciding what to buy at market
+- [ ] Demand-side analytics for suppliers deciding what to buy at market
 
 ---
 
