@@ -8,8 +8,21 @@
   <img src="https://img.shields.io/badge/PostgreSQL-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
   <img src="https://img.shields.io/badge/Flyway-CC0200?style=flat-square&logo=flyway&logoColor=white" alt="Flyway"/>
   <img src="https://img.shields.io/badge/Spring%20Security-JWT-6DB33F?style=flat-square&logo=springsecurity&logoColor=white" alt="Spring Security"/>
-  <img src="https://img.shields.io/badge/Maven-C71A36?style=flat-square&logo=apachemaven&logoColor=white" alt="Maven"/>
+  <img src="https://img.shields.io/badge/Swagger-85EA2D?style=flat-square&logo=swagger&logoColor=black" alt="Swagger"/>
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
+  <img src="https://img.shields.io/badge/tests-65%20passing-brightgreen?style=flat-square" alt="65 tests"/>
 </p>
+
+---
+
+## Contents
+
+- [The Problem](#the-problem) · [Features](#features) · [Architecture](#architecture) · [Data Model](#data-model)
+- [API Reference](#api-reference) · [Order Lifecycle](#order-lifecycle) · [Delivery](#delivery) · [Demand Matching](#demand-matching)
+- [Getting Started](#getting-started) · [API Documentation](#api-documentation) · [Running with Docker](#running-with-docker)
+- [Security](#security) · [Testing](#testing) · [Continuous Integration](#continuous-integration)
+- [Configuration](#configuration) · [Database Migrations](#database-migrations) · [Error Responses](#error-responses)
+- [Tech Stack](#tech-stack) · [Roadmap](#roadmap) · [Author](#author)
 
 ---
 
@@ -28,24 +41,28 @@ It runs two complementary trade flows:
 
 ## Features
 
-- **Three-role access model** — `SUPPLIER`, `CAFE`, and `ADMIN`, enforced with method-level `@PreAuthorize` guards on every controller.
-- **Ownership enforced in the service layer** — a café can only ever read or modify its own orders and demand; a supplier only its own listings and matches. Checks live below the controller so they cannot be bypassed by a new caller.
-- **JWT authentication with rotating refresh tokens** — refresh tokens are stored only as SHA-256 hashes and rotate on every use. Replaying a spent token is treated as theft and revokes every session for that account.
-- **Email OTP verification** — 6-digit codes via SMTP, 5-minute expiry, capped retry attempts before invalidation.
-- **Rate-limited auth endpoints** — token-bucket caps on login and OTP issuance, per client IP and per email address, so credential stuffing and inbox flooding both hit a wall.
-- **Supplier fish catalogue** — full CRUD over listings, scoped so a supplier can only touch their own inventory.
-- **Café marketplace search** — browse available fish filtered by species and city. Suspended and removed suppliers never appear.
-- **Email notifications** — suppliers are told when an order arrives, cafés when it is accepted, rejected, completed or the delivery moves. Sent after commit on a background pool, so mail never delays or fails a request.
-- **Price history** — every price a listing has charged, recorded on creation and on each change, so cafés can judge an offer and seasonal movement is visible.
+**Trading**
+
+- **Spot marketplace** — suppliers publish listings; cafés browse by species and city, paged and sorted. Suspended and removed suppliers never appear.
+- **Tracked order lifecycle** — accept, reject, delivering and completion transitions, each a distinct authorised endpoint.
+- **Concurrency-safe stock** — reservations are guarded by an optimistic-locking version column, proven by concurrent integration tests: without it, two 60 kg orders against 100 kg of stock both succeed.
+- **Demand matching engine** — greedy allocation ranked by freshness, then supplier rating, then catch time. Re-runs every 10 minutes, allocates only the outstanding shortfall, and expires matches a supplier never answers so their supply returns to the pool.
 - **Delivery tracking** — driver, phone, ETA and arrival time per order, with validated status transitions. Cafés can see where their fish is.
-- **Tracked order lifecycle** — orders move through accept, reject, delivering, and completion transitions, each a distinct authorised endpoint.
-- **Concurrency-safe stock** — reservations are guarded by an optimistic-locking version column, proven by concurrent integration tests: without it, two 60kg orders against 100kg of stock both succeed.
-- **Demand matching engine** — greedy allocation ranked by freshness, then supplier rating, then catch time; re-runs every 10 minutes for unfilled demand.
+- **Price history** — every price a listing has charged, recorded on creation and on each change, so cafés can judge an offer and seasonal movement is visible.
 - **Post-delivery ratings** — cafés rate suppliers once an order completes, feeding both the leaderboard and the matching engine's ranking.
-- **Admin oversight** — account activation, soft deletion with safeguards, and an analytics dashboard.
+
+**Platform**
+
+- **Three-role access model** — `SUPPLIER`, `CAFE`, `ADMIN`, enforced with method-level `@PreAuthorize` on every controller.
+- **Ownership enforced in the service layer** — below the controller, so it cannot be bypassed by a new caller.
+- **JWT auth with rotating refresh tokens** — hashed at rest, rotated on every use, replay treated as theft.
+- **Rate-limited auth endpoints** — token-bucket caps per IP and per email address.
+- **Email OTP verification** — 6-digit codes, 5-minute expiry, capped attempts.
+- **Transactional notifications** — sent after commit on a background pool, so mail never delays or fails a request.
+- **Admin oversight** — account activation, soft deletion with safeguards, analytics dashboard.
 - **Versioned schema** — Flyway owns every table; Hibernate only validates.
-- **Interactive API docs** — Swagger UI with JWT authorisation wired in, for building against the API without guesswork.
-- **Container-ready** — multi-stage Dockerfile, Compose stack with Postgres, and health/readiness probes wired for orchestration.
+- **Interactive API docs** — Swagger UI with JWT authorisation wired in.
+- **Container-ready** — multi-stage Dockerfile, Compose stack, health and readiness probes.
 
 ---
 
@@ -69,14 +86,52 @@ src/main/java/com/freshlink/
 │       └── impl/   # Implementations
 ├── Repository/     # Spring Data JPA repositories
 ├── model/          # JPA entities
-├── security/       # SecurityConfig, JwtFilter, UserPrincipal
+├── security/       # SecurityConfig, JwtFilter, RateLimitFilter, UserPrincipal
+├── notification/   # Domain events + after-commit email listener
 ├── exception/      # Typed exceptions + global handler
 ├── util/           # JwtUtil
-├── enums/          # Role, OrderStatus, DemandStatus, MatchStatus, ...
+├── enums/          # Role, OrderStatus, DemandStatus, MatchStatus, DeliveryStatus, ...
 ├── mapper/         # Entity ↔ DTO mapping
-├── config/, cache/ # Caching and scheduled eviction
+├── config/, cache/ # OpenAPI, async pool, caching, scheduled eviction
 └── *dto/           # Request/response DTOs, grouped by domain
 ```
+
+---
+
+## Data Model
+
+```
+                    ┌──────────────┐
+                    │  user_table  │  JOINED inheritance
+                    └──────┬───────┘
+              ┌────────────┼────────────┐
+        ┌─────▼────┐  ┌────▼───┐  ┌─────▼──────┐
+        │  admin   │  │  cafe  │  │  supplier  │
+        └──────────┘  └───┬────┘  └─────┬──────┘
+                          │             │
+              ┌───────────┤             ├──────────────┐
+              │           │             │              │
+      ┌───────▼──────┐ ┌──▼─────┐  ┌────▼────┐  ┌──────▼───────┐
+      │demand_request│ │ orders │  │  fish   │  │ daily_supply │
+      └───────┬──────┘ └──┬──┬──┘  └────┬────┘  └──────┬───────┘
+              │           │  │          │              │
+              │      ┌────▼┐ │   ┌──────▼───────────┐  │
+              │      │items│ │   │fish_price_history│  │
+              │      └─────┘ │   └──────────────────┘  │
+              │              │                         │
+              │        ┌─────▼────┐                    │
+              │        │ delivery │                    │
+              │        └──────────┘                    │
+              │                                        │
+              └──────────► supply_match ◄──────────────┘
+                                │
+                                └──▶ orders.supply_match_id
+```
+
+Users use **JOINED inheritance**: one row in `user_table` per account plus one in the
+subtype table sharing its id. An accepted `supply_match` creates an `order` and links
+back to itself, so a matched order can be traced to the demand that produced it — spot
+orders leave that link null.
 
 ---
 
@@ -155,8 +210,6 @@ New accounts are created inactive and require **both** email verification and ad
 | `GET` | `/admin/analytics/dashboard` | Revenue, order and demand metrics |
 | `GET` | `/admin/analytics/suppliers` | Supplier performance leaderboard |
 
----
-
 ### Paging
 
 List endpoints take `page`, `size` and `sort` and return a Spring `Page`:
@@ -231,12 +284,12 @@ Supplier records daily catch      Café posts demand
             creates order      to the pool
 ```
 
-Matching runs on creation and again every 10 minutes for demand still open or partially filled,
-and only ever allocates the outstanding shortfall.
+Matching runs on creation and again every 10 minutes for demand still open or partially
+filled, and only ever allocates the outstanding shortfall.
 
-A pending match reserves part of a supply, so one a supplier never answers is expired after
-24 hours (`MATCH_PENDING_TIMEOUT_HOURS`) and its quantity returns to the pool. Demand whose
-delivery date has passed is closed rather than retried forever.
+A pending match reserves part of a supply, so one a supplier never answers is expired
+after 24 hours (`MATCH_PENDING_TIMEOUT_HOURS`) and its quantity returns to the pool.
+Demand whose delivery date has passed is closed rather than retried forever.
 
 ---
 
@@ -246,7 +299,7 @@ delivery date has passed is closed rather than retried forever.
 
 - JDK 21+
 - PostgreSQL 14+
-- An SMTP account for OTP delivery (Gmail app passwords work)
+- An SMTP account, only if you want OTP and notification email to actually send
 
 ### Setup
 
@@ -275,7 +328,7 @@ spring.datasource.url=jdbc:postgresql://localhost:5432/FL_db
 spring.datasource.username=YOUR_DB_USER
 spring.datasource.password=YOUR_DB_PASSWORD
 
-# Optional — needed only if you want OTP emails to actually send
+# Optional — needed only if you want OTP and notification emails to send
 spring.mail.username=YOUR_EMAIL
 spring.mail.password=YOUR_APP_PASSWORD
 ```
@@ -292,12 +345,6 @@ mvnw.cmd spring-boot:run      # Windows
 The API comes up on `http://localhost:8080`.
 
 On first start the application applies migrations, seeds fish-type reference data and demo traders, and creates the admin account from `app.admin.*` if both values are set. No credentials are compiled into the source — omit them and admin bootstrapping is skipped with a warning.
-
-Run the tests:
-
-```bash
-./mvnw test
-```
 
 ### Trying it out
 
@@ -348,7 +395,12 @@ Brings up Postgres and the API together. The app waits for the database to pass
 its healthcheck before starting, so Flyway does not race it.
 
 Compose runs the **prod** profile, which by design has no fallback values — every
-variable in the table below must be set or startup fails loudly.
+variable in the [configuration table](#production-environment-variables) must be set or
+startup fails loudly.
+
+The image builds from the `maven` base rather than `./mvnw`: the wrapper is checked out
+with CRLF line endings on Windows and a Linux container rejects it. It runs as a non-root
+user, and `.dockerignore` keeps `application-local.properties` out of every layer.
 
 ### Health probes
 
@@ -364,6 +416,129 @@ Only `health` and `info` are exposed. `env`, `beans`, `configprops` and
 Mail is deliberately excluded from health: OTP delivery failing does not stop the
 API serving traffic, and letting an SMTP blip mark the app DOWN invites an
 orchestrator to restart a process that is working fine.
+
+---
+
+## Security
+
+### Authentication
+
+Short-lived JWT access tokens (5 minutes) with long-lived refresh tokens (7 days).
+`JwtUtil` refuses to start if the signing secret is under 32 bytes — HS256 requires
+256 bits, and a shorter key would be silently weak.
+
+Refresh tokens are **256 bits of randomness, stored only as SHA-256 hashes**. A database
+dump therefore yields no usable credentials. They **rotate on every use**: the response
+carries a new token and the one presented stops working.
+
+Spent tokens are retained rather than deleted so that replay is detectable. Presenting one
+again revokes **every session** for that account — there is no way to tell the rightful
+holder from whoever copied it, so both are signed out. Refreshing also re-checks that the
+account is still active and not soft-deleted, so a suspended user cannot refresh
+indefinitely.
+
+### Authorisation
+
+Role checks sit on the controller with `@PreAuthorize`. **Resource ownership is enforced
+in the service layer**, below the controller, so a future caller cannot bypass it.
+
+An ownership mismatch returns **404, not 403**. A 403 confirms the id exists and lets one
+account enumerate another's orders, demand or listings.
+
+### Rate limiting
+
+Token buckets on the only endpoints reachable without a token:
+
+| Endpoint | Default |
+| :--- | :--- |
+| `/auth/login` | 5 per IP per 15 min |
+| `/auth/request-otp` | 3 per IP per 15 min, **plus** 3 per email address |
+| `/auth/verify-otp` | 3 per IP per 15 min |
+
+The limit applies to the endpoint rather than to failures, so exhausting it blocks a
+correct password too — counting only failures would let an attacker reset their allowance
+with one valid login. The per-email cap exists because an IP-only limit still lets a
+rotating pool of addresses bury one inbox in codes.
+
+> Buckets are in-memory and per-instance, so two replicas double the effective allowance.
+> Moving to `bucket4j-redis` is required before scaling horizontally.
+
+### Account lifecycle
+
+Accounts are **soft-deleted** — the row is retained so orders, ratings and analytics keep
+their references and trade history stays intact. Deletion is refused when the account is
+the last remaining admin, is the acting admin's own account, or still has orders in
+progress.
+
+Removed suppliers are excluded from the market, from matching, and from direct ordering by
+fish id. Email addresses are deliberately **not** released, so a removed supplier cannot
+re-register on the same address to shed its rating history.
+
+### Other measures
+
+- Sessions are stateless; CSRF is disabled because there is no cookie-borne ambient authority to protect.
+- CORS origins come from configuration, not a wildcard.
+- Passwords are BCrypt-hashed.
+- Production hides stack traces, error messages and health detail.
+- Demo data seeding is behind a property the prod profile sets to `false`, so it structurally cannot run against production.
+
+---
+
+## Testing
+
+**65 tests** — 58 unit, 7 integration. All of them run on every push.
+
+```bash
+./mvnw test      # unit tests only (fast, no database needed for most)
+./mvnw verify    # unit + integration — what CI runs
+```
+
+> Integration tests are named `*IT` and run under **Failsafe**, not Surefire.
+> `./mvnw test` alone will silently skip them.
+
+### Unit tests
+
+Service-layer tests with mocked repositories. Deliberately concentrated on the rules that
+are invisible in a code read and expensive to get wrong:
+
+| Suite | Covers |
+| :--- | :--- |
+| `DemandServiceOwnershipTest` | A café cannot read or delete another's demand |
+| `CafeServiceOwnershipTest` | A café cannot cancel another's order |
+| `SupplierServiceOwnershipTest` | A supplier cannot accept or reject another's match |
+| `DailySupplyOwnershipTest` | Catch ownership, and quantity rules against accepted matches |
+| `DeliveryTrackingTest` | Status transitions, server-stamped arrival, terminal states |
+| `AdminServiceDeletionTest` | Self-delete, last-admin and in-flight-order guards |
+| `RefreshTokenRotationTest` | Hashing, rotation, replay revocation, suspended accounts |
+| `RateLimitServiceTest` | Capacity, key isolation, refill, idle eviction |
+| `DemandMatchServiceTest` | Shortfall-only allocation, over-allocation, status recomputation |
+| `PriceHistoryTest` | Records real changes only, ignores rescales |
+| `NotificationListenerTest` | Mail failure swallowed, no `null` in message bodies |
+
+### Integration tests
+
+Real HTTP over a real migrated PostgreSQL schema. These catch what mocked tests
+structurally cannot — and did: an unfiltered market browse was returning 500 because
+`LOWER()` on a null bind parameter makes PostgreSQL infer `bytea`. No unit test could have
+found it, because they all mock the repository.
+
+- **`OrderLifecycleIT`** — order → accept → deliver → complete → rate, plus double-rating, cancelling a completed order, over-ordering, and paging shape.
+- **`ConcurrentOrderIT`** — genuine concurrent transactions fired from a latch, proving the optimistic lock on stock.
+
+### On the concurrency tests
+
+A concurrency test can pass simply because the threads serialised, proving nothing. These
+were verified by **removing `@Version` and re-running**:
+
+| Scenario | Without the lock |
+| :--- | :--- |
+| Two 60 kg orders vs 100 kg | Both succeeded — 120 kg sold from 100 |
+| Three 8 kg orders vs 10 kg | All three succeeded — 24 kg sold from 10 |
+| Eight 5 kg orders | 8 succeeded, only 5 kg reserved — 7 reservations silently lost |
+
+All three tests failed, then passed again on revert. The assertions also hold under either
+interleaving — the loser either hits the version conflict or re-reads reduced stock — so
+they do not flake.
 
 ---
 
@@ -391,18 +566,23 @@ Configuration is split so that **no secret is ever committed**:
 
 The committed profile files contain only `${ENV_VAR}` references, which is why they are safe to track.
 
+> The local override is imported from `application-dev.properties`, not from the base file.
+> A profile-specific document outranks the base file *and* everything it imports, so an
+> import declared there would lose to the profile's own defaults.
+
 ### Production environment variables
 
 | Variable | Notes |
 | :--- | :--- |
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Database connection |
 | `JWT_SECRET` | **Minimum 32 bytes.** HS256 rejects anything shorter, and startup fails with an explicit message. |
-| `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP credentials for OTP delivery |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP credentials |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins |
 | `RATELIMIT_LOGIN_CAPACITY` | Sign-in attempts per window (default 5) |
 | `RATELIMIT_LOGIN_WINDOW` | Window in minutes (default 15) |
 | `RATELIMIT_OTP_CAPACITY` | OTP requests per window (default 3) |
 | `RATELIMIT_OTP_WINDOW` | Window in minutes (default 15) |
+| `MATCH_PENDING_TIMEOUT_HOURS` | How long a supplier has to answer a match (default 24) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap admin — omit to skip creation |
 | `NOTIFICATIONS_ENABLED` | Set `false` to suppress outbound email |
 
@@ -420,9 +600,18 @@ Flyway owns the schema in every environment; Hibernate is set to `validate` and 
 - Name them `V<n>__short_description.sql`
 - **Never edit an applied migration** — Flyway checksums them. Add a new one.
 
-`V1__baseline_schema.sql` is the full baseline: 15 tables, foreign keys, and indexes on every FK column (PostgreSQL does not create those automatically).
+| Migration | What it does |
+| :--- | :--- |
+| `V1__baseline_schema` | 15 tables, foreign keys, and indexes on every FK column |
+| `V2__hash_and_rotate_refresh_tokens` | Token hashing and rotation support |
+| `V3__link_orders_to_supply_match` | Traceability from a matched order back to its demand |
+| `V4__supply_match_created_at` | Ages matches so abandoned ones can be expired |
+| `V5__delivery_tracking` | Driver, ETA, arrival time, and the `IN_TRANSIT`/`FAILED` states |
+| `V6__fish_price_history` | Append-only price record |
 
 Identifiers are `snake_case` because Spring Boot applies `CamelCaseToUnderscoresNamingStrategy` — `businessRegNo` becomes `business_reg_no`. Do not rename or quote them, or schema validation stops matching.
+
+PostgreSQL does not index foreign keys automatically, so the baseline adds them explicitly.
 
 To reset a local database:
 
@@ -431,14 +620,6 @@ To reset a local database:
 ```
 
 `clean` is disabled on the `prod` profile.
-
----
-
-## Account Lifecycle
-
-Accounts are **soft-deleted** — the row is retained so orders, ratings, and analytics keep their references and trade history stays intact. Deletion is refused when the account is the last remaining admin, is the acting admin's own account, or still has orders in progress.
-
-Removed suppliers are excluded from the market, from matching, and from direct ordering by fish id. Email addresses are deliberately not released, so a removed supplier cannot re-register on the same address to shed its rating history.
 
 ---
 
@@ -494,12 +675,16 @@ Every failure returns a consistent body:
 | Layer | Choice |
 | :--- | :--- |
 | Language | Java 21 |
-| Framework | Spring Boot 4.0.1 (Web MVC, Data JPA, Security, Validation, Mail) |
+| Framework | Spring Boot 4.0.1 (Web MVC, Data JPA, Security, Validation, Mail, Actuator) |
 | Database | PostgreSQL |
 | Migrations | Flyway |
-| Auth | Spring Security + JJWT, persisted refresh tokens |
-| Build | Maven Wrapper |
+| Auth | Spring Security + JJWT 0.12, hashed rotating refresh tokens |
+| Rate limiting | Bucket4j |
+| API docs | springdoc-openapi (Swagger UI) |
+| Build | Maven Wrapper, Surefire + Failsafe |
 | Testing | JUnit 5, Mockito, AssertJ, MockMvc |
+| Container | Docker multi-stage, Docker Compose |
+| CI | GitHub Actions |
 | Boilerplate | Lombok |
 
 ---
@@ -507,6 +692,10 @@ Every failure returns a consistent body:
 ## Roadmap
 
 - [ ] Delivery route grouping across orders
+- [ ] Shared-store rate limiting (`bucket4j-redis`) before running more than one instance
+- [ ] WebSocket or push notifications alongside email
+- [ ] Market-wide price analytics per fish type, not just per listing
+- [ ] Richer demand analytics for suppliers deciding what to buy at market
 
 ---
 
