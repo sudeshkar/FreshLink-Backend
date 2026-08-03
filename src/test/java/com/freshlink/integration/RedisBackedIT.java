@@ -95,6 +95,31 @@ class RedisBackedIT {
 		assertThat(rateLimitService.tryConsume(key, 2, window)).isFalse();
 	}
 
+	@Autowired private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+
+	@Test
+	@DisplayName("DIAGNOSTIC: is the Spring Redis connection usable at all")
+	void springRedisConnectionWorks() {
+		String key = "diag-" + System.nanoTime();
+		redisTemplate.opsForValue().set(key, "hello");
+		assertThat(redisTemplate.opsForValue().get(key))
+				.as("a raw round trip through Spring's connection factory")
+				.isEqualTo("hello");
+	}
+
+	@Test
+	@DisplayName("DIAGNOSTIC: does a value written to the cache come back")
+	void cacheRoundTripWorks() {
+		String key = "diag-cache-" + System.nanoTime();
+		var cache = cacheManager.getCache(AccountStatusService.CACHE);
+		assertThat(cache).as("the cache must exist").isNotNull();
+
+		cache.put(key, Boolean.TRUE);
+		assertThat(cache.get(key))
+				.as("written straight to the cache and read straight back")
+				.isNotNull();
+	}
+
 	@Test
 	@DisplayName("an answer cached by one instance is honoured by another")
 	void accountStatusIsSharedThroughRedis() {
