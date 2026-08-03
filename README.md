@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Spring%20Security-JWT-6DB33F?style=flat-square&logo=springsecurity&logoColor=white" alt="Spring Security"/>
   <img src="https://img.shields.io/badge/Swagger-85EA2D?style=flat-square&logo=swagger&logoColor=black" alt="Swagger"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
-  <img src="https://img.shields.io/badge/tests-65%20passing-brightgreen?style=flat-square" alt="65 tests"/>
+  <img src="https://img.shields.io/badge/tests-82%20passing-brightgreen?style=flat-square" alt="82 tests"/>
 </p>
 
 ---
@@ -121,7 +121,7 @@ src/main/java/com/freshlink/
               │      └─────┘ │   └──────────────────┘  │
               │              │                         │
               │        ┌─────▼────┐                    │
-              │        │ delivery │                    │
+              │        │ delivery │──▶ delivery_route   │
               │        └──────────┘                    │
               │                                        │
               └──────────► supply_match ◄──────────────┘
@@ -510,7 +510,7 @@ re-register on the same address to shed its rating history.
 
 ## Testing
 
-**65 tests** — 58 unit, 7 integration. All of them run on every push.
+**82 tests** — 72 unit, 10 integration. All of them run on every push.
 
 ```bash
 ./mvnw test      # unit tests only (fast, no database needed for most)
@@ -532,6 +532,8 @@ are invisible in a code read and expensive to get wrong:
 | `SupplierServiceOwnershipTest` | A supplier cannot accept or reject another's match |
 | `DailySupplyOwnershipTest` | Catch ownership, and quantity rules against accepted matches |
 | `DeliveryTrackingTest` | Status transitions, server-stamped arrival, terminal states |
+| `DeliveryRouteTest` | Route grouping, dispatch, completion guards, detach-on-cancel |
+| `MatchedOrderStockTest` | A matched order reserves its listing and cannot oversell |
 | `AdminServiceDeletionTest` | Self-delete, last-admin and in-flight-order guards |
 | `RefreshTokenRotationTest` | Hashing, rotation, replay revocation, suspended accounts |
 | `RateLimitServiceTest` | Capacity, key isolation, refill, idle eviction |
@@ -548,6 +550,7 @@ found it, because they all mock the repository.
 
 - **`OrderLifecycleIT`** — order → accept → deliver → complete → rate, plus double-rating, cancelling a completed order, over-ordering, and paging shape.
 - **`ConcurrentOrderIT`** — genuine concurrent transactions fired from a latch, proving the optimistic lock on stock.
+- **`RevenueAccountingIT`** — revenue is recognised only on completion. JPQL semantics cannot be proven against a mocked repository, so this runs the real query.
 
 ### On the concurrency tests
 
