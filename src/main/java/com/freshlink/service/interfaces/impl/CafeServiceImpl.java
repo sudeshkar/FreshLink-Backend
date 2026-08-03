@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ import com.freshlink.model.Supplier;
 import com.freshlink.orderdto.OrderCreateRequest;
 import com.freshlink.orderdto.OrderItemDto;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.notification.NotificationEvents;
 import com.freshlink.service.interfaces.CafeService;
 import com.freshlink.userprofiledto.CafeProfileResponse;
 
@@ -47,6 +49,7 @@ public class CafeServiceImpl implements CafeService{
     private final OrderMapper orderMapper;
     private final DeliveryRepository deliveryRepository;
     private final FishPriceHistoryRepository fishPriceHistoryRepository;
+    private final ApplicationEventPublisher events;
 	
 	@Override
 	public CafeProfileResponse getProfile(String name) {
@@ -177,7 +180,18 @@ public class CafeServiceImpl implements CafeService{
 	    // into a 409 telling the cafe to retry.
 	    Order savedOrder = orderRepository.save(order);
 
-	    return orderMapper.toOrderResponse(savedOrder);
+	    OrderResponse response = orderMapper.toOrderResponse(savedOrder);
+
+	    // Published, not sent: the listener waits for commit, so a rolled-back
+	    // order never reaches the supplier's inbox.
+	    events.publishEvent(new NotificationEvents.OrderPlaced(
+	            savedOrder.getId(),
+	            orderSupplier.getEmail(),
+	            orderSupplier.getName(),
+	            cafe.getName(),
+	            response.totalAmount()));
+
+	    return response;
 		
 	}
 

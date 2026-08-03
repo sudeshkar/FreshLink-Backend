@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.freshlink.Repository.DailySupplyRepository;
 import com.freshlink.Repository.DeliveryRepository;
@@ -54,6 +55,8 @@ class SupplierServiceOwnershipTest {
 	@Mock private DailySupplyRepository dailySupplyRepository;
 	@Mock private DemandRepository demandRepository;
 	@Mock private DeliveryRepository deliveryRepository;
+
+	@Mock private ApplicationEventPublisher events;
 
 	@InjectMocks private SupplierServiceImpl supplierService;
 

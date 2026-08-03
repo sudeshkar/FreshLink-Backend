@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.freshlink.Repository.DailySupplyRepository;
 import com.freshlink.Repository.DeliveryRepository;
@@ -57,6 +58,8 @@ class PriceHistoryTest {
 	@Mock private DemandMatchingScheduler demandMatchingScheduler;
 	@Mock private DemandMatchService demandMatchService;
 	@Mock private FishPriceHistoryRepository fishPriceHistoryRepository;
+
+	@Mock private ApplicationEventPublisher events;
 
 	@InjectMocks private SupplierServiceImpl supplierService;
 

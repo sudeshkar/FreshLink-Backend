@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,7 @@ import com.freshlink.model.OrderItem;
 import com.freshlink.model.Supplier;
 import com.freshlink.model.SupplyMatch;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.notification.NotificationEvents;
 import com.freshlink.service.interfaces.DemandMatchService;
 import com.freshlink.service.interfaces.DemandMatchingScheduler;
 import com.freshlink.service.interfaces.SupplierService;
@@ -77,6 +79,7 @@ public class SupplierServiceImpl implements SupplierService{
     private final DemandMatchingScheduler demandMatchingScheduler;
     private final DemandMatchService demandMatchService;
     private final FishPriceHistoryRepository fishPriceHistoryRepository;
+    private final ApplicationEventPublisher events;
     
 	@Override
 	
@@ -182,6 +185,7 @@ public class SupplierServiceImpl implements SupplierService{
 	         
 	    }
 		 order.setStatus(OrderStatus.ACCEPTED);
+		 publishOrderStatus(order);
 		 
 		 
 		  
@@ -216,6 +220,7 @@ public class SupplierServiceImpl implements SupplierService{
 		        );
 		    }
 		 order.setStatus(OrderStatus.REJECTED);
+		 publishOrderStatus(order);
 
 		  
 		
@@ -247,6 +252,7 @@ public class SupplierServiceImpl implements SupplierService{
 	    }
 
 	    order.setStatus(OrderStatus.COMPLETED);
+	    publishOrderStatus(order);
 
 	    // Completing the order settles the delivery too, so the two cannot drift
 	    // apart and leave a delivered order tracking as still scheduled.
@@ -356,7 +362,25 @@ public class SupplierServiceImpl implements SupplierService{
 			delivery.setNotes(dto.notes());
 		}
 
-		return toDeliveryResponse(deliveryRepository.save(delivery));
+		Delivery saved = deliveryRepository.save(delivery);
+
+		events.publishEvent(new NotificationEvents.DeliveryStatusChanged(
+				order.getId(),
+				order.getCafe().getEmail(),
+				saved.getStatus().name(),
+				saved.getDriverName(),
+				saved.getDriverPhone()));
+
+		return toDeliveryResponse(saved);
+	}
+
+	private void publishOrderStatus(Order order) {
+		events.publishEvent(new NotificationEvents.OrderStatusChanged(
+				order.getId(),
+				order.getCafe().getEmail(),
+				order.getCafe().getName(),
+				order.getSupplier().getName(),
+				order.getStatus().name()));
 	}
 
 	private Delivery requireDelivery(Order order) {

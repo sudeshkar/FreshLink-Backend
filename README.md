@@ -35,6 +35,7 @@ It runs two complementary trade flows:
 - **Rate-limited auth endpoints** — token-bucket caps on login and OTP issuance, per client IP and per email address, so credential stuffing and inbox flooding both hit a wall.
 - **Supplier fish catalogue** — full CRUD over listings, scoped so a supplier can only touch their own inventory.
 - **Café marketplace search** — browse available fish filtered by species and city. Suspended and removed suppliers never appear.
+- **Email notifications** — suppliers are told when an order arrives, cafés when it is accepted, rejected, completed or the delivery moves. Sent after commit on a background pool, so mail never delays or fails a request.
 - **Price history** — every price a listing has charged, recorded on creation and on each change, so cafés can judge an offer and seasonal movement is visible.
 - **Delivery tracking** — driver, phone, ETA and arrival time per order, with validated status transitions. Cafés can see where their fish is.
 - **Tracked order lifecycle** — orders move through accept, reject, delivering, and completion transitions, each a distinct authorised endpoint.
@@ -403,6 +404,7 @@ The committed profile files contain only `${ENV_VAR}` references, which is why t
 | `RATELIMIT_OTP_CAPACITY` | OTP requests per window (default 3) |
 | `RATELIMIT_OTP_WINDOW` | Window in minutes (default 15) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap admin — omit to skip creation |
+| `NOTIFICATIONS_ENABLED` | Set `false` to suppress outbound email |
 
 ```bash
 java -jar target/freshlink-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
@@ -437,6 +439,26 @@ To reset a local database:
 Accounts are **soft-deleted** — the row is retained so orders, ratings, and analytics keep their references and trade history stays intact. Deletion is refused when the account is the last remaining admin, is the acting admin's own account, or still has orders in progress.
 
 Removed suppliers are excluded from the market, from matching, and from direct ordering by fish id. Email addresses are deliberately not released, so a removed supplier cannot re-register on the same address to shed its rating history.
+
+---
+
+## Notifications
+
+Transactional email on order placed, accepted, rejected, completed, and on every
+delivery status change.
+
+Two properties hold regardless of what the mail server does:
+
+- **Sent after commit.** Listeners bind to `AFTER_COMMIT`, so an order that rolls
+  back never generates an email announcing it.
+- **Failures never propagate.** Notification is a courtesy, not part of the
+  transaction. A dead SMTP server logs a warning on the background pool and the
+  request is entirely unaffected.
+
+The pool is small and bounded, and drops work rather than running it on the caller
+when saturated — a missed courtesy email beats a stalled request thread.
+
+Set `NOTIFICATIONS_ENABLED=false` to turn them off.
 
 ---
 
