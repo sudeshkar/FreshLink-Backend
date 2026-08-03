@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import com.freshlink.enums.SupplyStatus;
 import com.freshlink.model.DailySupply;
 import com.freshlink.model.FishType;
+import com.freshlink.model.Supplier;
 
 public interface DailySupplyRepository extends JpaRepository<DailySupply, Long>{
 
@@ -30,5 +31,7 @@ public interface DailySupplyRepository extends JpaRepository<DailySupply, Long>{
 	    );
 	
 	long countByStatus(SupplyStatus status);
+
+	List<DailySupply> findBySupplierOrderByCatchDateTimeDesc(Supplier supplier);
 
 }

@@ -18,11 +18,13 @@ import com.freshlink.service.interfaces.AuthService;
 import com.freshlink.service.interfaces.OtpService;
 import com.freshlink.service.interfaces.VerifyUserService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Tag(name = "Authentication", description = "Registration, OTP verification, login, and token refresh. No token required.")
 public class AuthController {
 	
 	private final AuthService authService;

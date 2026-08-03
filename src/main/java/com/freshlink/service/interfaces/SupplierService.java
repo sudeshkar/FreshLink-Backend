@@ -6,6 +6,9 @@ import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.supplydto.DailySupplyCreateRequest;
+import com.freshlink.supplydto.DailySupplyResponse;
+import com.freshlink.supplydto.DailySupplyUpdateRequest;
 import com.freshlink.supplymatch.dto.SupplyMatchResponse;
 import com.freshlink.userprofiledto.SupplierProfileResponse;
 
@@ -31,6 +34,16 @@ public interface SupplierService {
 		void completeOrder(Long orderId, String supplierEmail);
 
 		List<SupplyMatchResponse> getPendingMatches(String supplierEmail);
+
+	// ---- Daily supply: the matching engine's input ----
+
+	DailySupplyResponse addDailySupply(DailySupplyCreateRequest dto, String supplierEmail);
+
+	List<DailySupplyResponse> getMyDailySupply(String supplierEmail);
+
+	DailySupplyResponse updateDailySupply(Long id, DailySupplyUpdateRequest dto, String supplierEmail);
+
+	void deleteDailySupply(Long id, String supplierEmail);
 
 		void acceptMatch(Long id, String supplierEmail);
 

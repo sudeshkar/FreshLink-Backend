@@ -48,6 +48,9 @@ public class SecurityConfig {
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/api/v1/auth/**").permitAll()
+						// API documentation. Exposed in dev; put these behind your
+						// ingress or set springdoc.api-docs.enabled=false in prod.
+						.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
 						.anyRequest().authenticated())
 				// Without these, an unauthenticated API call gets Spring's default HTML
 				// error page instead of a clean 401/403.

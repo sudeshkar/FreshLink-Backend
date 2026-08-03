@@ -40,7 +40,11 @@ import com.freshlink.model.OrderItem;
 import com.freshlink.model.Supplier;
 import com.freshlink.model.SupplyMatch;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.service.interfaces.DemandMatchingScheduler;
 import com.freshlink.service.interfaces.SupplierService;
+import com.freshlink.supplydto.DailySupplyCreateRequest;
+import com.freshlink.supplydto.DailySupplyResponse;
+import com.freshlink.supplydto.DailySupplyUpdateRequest;
 import com.freshlink.supplymatch.dto.SupplyMatchResponse;
 import com.freshlink.userprofiledto.SupplierProfileResponse;
 
@@ -60,6 +64,7 @@ public class SupplierServiceImpl implements SupplierService{
     private final DailySupplyRepository dailySupplyRepository;
     private final DemandRepository demandRepository;
     private final DeliveryRepository deliveryRepository;
+    private final DemandMatchingScheduler demandMatchingScheduler;
     
 	@Override
 	
@@ -253,6 +258,122 @@ public class SupplierServiceImpl implements SupplierService{
 		 
 	}
 	
+	// ---------------- DAILY SUPPLY ----------------
+
+	@Override
+	public DailySupplyResponse addDailySupply(DailySupplyCreateRequest dto, String supplierEmail) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+
+		FishType fishType = fishTypeRepository.findByNameIgnoreCase(dto.fishTypeName())
+				.orElseThrow(() -> new ResourceNotFoundException("Fish type", dto.fishTypeName()));
+
+		if (dto.catchDateTime().isAfter(LocalDateTime.now())) {
+			throw new BusinessRuleException("Catch date and time cannot be in the future");
+		}
+
+		DailySupply supply = new DailySupply();
+		supply.setSupplier(supplier);
+		supply.setFishType(fishType);
+		supply.setQuantity(dto.quantity());
+		supply.setCatchDateTime(dto.catchDateTime());
+		supply.setFreshnessScore(dto.freshnessScore());
+		supply.setStatus(SupplyStatus.AVAILABLE);
+
+		DailySupply saved = dailySupplyRepository.save(supply);
+
+		// Match straight away rather than leaving the new catch idle until the
+		// scheduler's next 10-minute pass - freshness is the whole point here.
+		demandMatchingScheduler.autoMatchDemands();
+
+		return toDailySupplyResponse(saved);
+	}
+
+	@Override
+	public List<DailySupplyResponse> getMyDailySupply(String supplierEmail) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+
+		return dailySupplyRepository.findBySupplierOrderByCatchDateTimeDesc(supplier)
+				.stream()
+				.map(this::toDailySupplyResponse)
+				.collect(Collectors.toList());
+	}
+
+	@Override
+	public DailySupplyResponse updateDailySupply(Long id, DailySupplyUpdateRequest dto, String supplierEmail) {
+		DailySupply supply = requireOwnDailySupply(id, supplierEmail);
+
+		if (supply.getStatus() == SupplyStatus.EXHAUSTED) {
+			throw new BusinessRuleException("Exhausted supply can no longer be edited");
+		}
+
+		if (dto.quantity() != null) {
+			// Quantity already promised to accepted matches cannot be revoked.
+			double committed = committedQuantity(supply);
+			if (dto.quantity() < committed) {
+				throw new BusinessRuleException(
+						"Cannot reduce quantity below the %.1f kg already accepted against this supply"
+								.formatted(committed));
+			}
+			supply.setQuantity(dto.quantity());
+			supply.setStatus(dto.quantity() == 0 ? SupplyStatus.EXHAUSTED : SupplyStatus.AVAILABLE);
+		}
+
+		if (dto.freshnessScore() != null) {
+			supply.setFreshnessScore(dto.freshnessScore());
+		}
+
+		return toDailySupplyResponse(dailySupplyRepository.save(supply));
+	}
+
+	@Override
+	public void deleteDailySupply(Long id, String supplierEmail) {
+		DailySupply supply = requireOwnDailySupply(id, supplierEmail);
+
+		List<SupplyMatch> matches = supplyMatchRepository.findByDailySupply(supply);
+
+		boolean hasAccepted = matches.stream().anyMatch(m -> m.getStatus() == MatchStatus.ACCEPTED);
+		if (hasAccepted) {
+			throw new BusinessRuleException(
+					"This supply has been accepted against a demand and can no longer be deleted");
+		}
+
+		// Pending matches hold no stock, but the FK to DailySupply is uncascaded
+		// so they have to go first.
+		supplyMatchRepository.deleteAll(matches);
+		dailySupplyRepository.delete(supply);
+	}
+
+	/** Quantity locked in by matches the supplier has already accepted. */
+	private double committedQuantity(DailySupply supply) {
+		return supplyMatchRepository.findByDailySupply(supply).stream()
+				.filter(match -> match.getStatus() == MatchStatus.ACCEPTED)
+				.mapToDouble(SupplyMatch::getConfirmedQuantity)
+				.sum();
+	}
+
+	private DailySupply requireOwnDailySupply(Long id, String supplierEmail) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+
+		return dailySupplyRepository.findById(id)
+				.filter(supply -> supply.getSupplier().getId().equals(supplier.getId()))
+				.orElseThrow(() -> new ResourceNotFoundException("Daily supply", id));
+	}
+
+	private DailySupplyResponse toDailySupplyResponse(DailySupply supply) {
+		return new DailySupplyResponse(
+				supply.getId(),
+				supply.getFishType().getId(),
+				supply.getFishType().getName(),
+				supply.getQuantity(),
+				supply.getCatchDateTime(),
+				supply.getFreshnessScore(),
+				supply.getStatus().name()
+		);
+	}
+
 	/**
 	 * Loads a match only if it belongs to the calling supplier's own daily supply.
 	 * 404 rather than 403 on a mismatch: a 403 would confirm the id exists and let

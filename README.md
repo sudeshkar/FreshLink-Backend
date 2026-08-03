@@ -40,6 +40,7 @@ It runs two complementary trade flows:
 - **Post-delivery ratings** — cafés rate suppliers once an order completes, feeding both the leaderboard and the matching engine's ranking.
 - **Admin oversight** — account activation, soft deletion with safeguards, and an analytics dashboard.
 - **Versioned schema** — Flyway owns every table; Hibernate only validates.
+- **Interactive API docs** — Swagger UI with JWT authorisation wired in, for building against the API without guesswork.
 
 ---
 
@@ -106,6 +107,10 @@ New accounts are created inactive and require **both** email verification and ad
 | `PUT` | `/suppliers/orders/{orderId}/reject` | Reject an order |
 | `PUT` | `/suppliers/orders/{orderId}/markdelivering` | Mark as out for delivery |
 | `PUT` | `/suppliers/orders/{orderId}/complete` | Mark as delivered |
+| `POST` | `/suppliers/daily-supply` | Record today's catch — triggers matching immediately |
+| `GET` | `/suppliers/daily-supply` | List own recorded catch |
+| `PUT` | `/suppliers/daily-supply/{id}` | Adjust quantity or freshness |
+| `DELETE` | `/suppliers/daily-supply/{id}` | Remove an unmatched entry |
 | `GET` | `/suppliers/supply-matches` | Pending demand matches |
 | `PUT` | `/suppliers/supply-matches/{id}/accept` | Accept a match — deducts supply, creates an order |
 | `PUT` | `/suppliers/supply-matches/{id}/reject` | Reject a match — returns demand to the pool |
@@ -267,6 +272,24 @@ curl http://localhost:8080/api/v1/cafes/market/fish?city=Kandy \
 
 ---
 
+## API Documentation
+
+Swagger UI is served in development at:
+
+```
+http://localhost:8080/swagger-ui.html
+```
+
+The OpenAPI 3 schema is at `/v3/api-docs` — point your frontend's client generator at it.
+
+To call protected endpoints from the UI: `POST /api/v1/auth/login`, copy the access token,
+click **Authorize**, and paste it.
+
+Both are disabled on the `prod` profile: a published schema is an attack map, so expose it
+deliberately rather than by default.
+
+---
+
 ## Configuration
 
 Configuration is split so that **no secret is ever committed**:
@@ -369,13 +392,11 @@ Every failure returns a consistent body:
 
 ## Roadmap
 
-- [ ] Supplier endpoint for recording daily supply (currently seeded only)
 - [ ] Rate limiting on login and OTP request endpoints
 - [ ] Hashed, rotating refresh tokens
 - [ ] Delivery assignment and route grouping
 - [ ] Integration test coverage across the order lifecycle
 - [ ] Pagination on list endpoints
-- [ ] OpenAPI/Swagger documentation
 - [ ] Containerised deployment
 
 ---

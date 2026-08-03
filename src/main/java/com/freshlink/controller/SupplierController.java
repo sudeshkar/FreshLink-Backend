@@ -18,15 +18,22 @@ import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
 import com.freshlink.service.interfaces.SupplierService;
+import com.freshlink.supplydto.DailySupplyCreateRequest;
+import com.freshlink.supplydto.DailySupplyResponse;
+import com.freshlink.supplydto.DailySupplyUpdateRequest;
 import com.freshlink.supplymatch.dto.SupplyMatchResponse;
 import com.freshlink.userprofiledto.SupplierProfileResponse;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/suppliers")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('SUPPLIER')")
+@Tag(name = "Supplier", description = "Fish listings, incoming orders, daily catch, and demand matches. Requires a SUPPLIER token.")
 public class SupplierController {
 	
 	private final SupplierService supplierService;
@@ -87,6 +94,34 @@ public class SupplierController {
     	supplierService.completeOrder(orderId,auth.getName());
     }
     
+    @Operation(summary = "Record today's catch",
+            description = "Feeds the matching engine. Matching runs immediately on save, "
+                    + "so a match may already exist by the time this returns.")
+    @PostMapping("/daily-supply")
+    public DailySupplyResponse addDailySupply(
+            @RequestBody @Valid DailySupplyCreateRequest dto,
+            Authentication auth) {
+        return supplierService.addDailySupply(dto, auth.getName());
+    }
+
+    @GetMapping("/daily-supply")
+    public List<DailySupplyResponse> myDailySupply(Authentication auth) {
+        return supplierService.getMyDailySupply(auth.getName());
+    }
+
+    @PutMapping("/daily-supply/{id}")
+    public DailySupplyResponse updateDailySupply(
+            @PathVariable Long id,
+            @RequestBody @Valid DailySupplyUpdateRequest dto,
+            Authentication auth) {
+        return supplierService.updateDailySupply(id, dto, auth.getName());
+    }
+
+    @DeleteMapping("/daily-supply/{id}")
+    public void deleteDailySupply(@PathVariable Long id, Authentication auth) {
+        supplierService.deleteDailySupply(id, auth.getName());
+    }
+
     @GetMapping("/supply-matches")
     public List<SupplyMatchResponse> myMatches(Authentication auth) {
         return supplierService.getPendingMatches(auth.getName());

@@ -21,12 +21,14 @@ import com.freshlink.service.interfaces.CafeService;
 import com.freshlink.service.interfaces.RatingService;
 import com.freshlink.userprofiledto.CafeProfileResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/cafes")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('CAFE')")
+@Tag(name = "Cafe", description = "Marketplace browsing, ordering, and supplier ratings. Requires a CAFE token.")
 public class CafeController {
 	
 	 	private final CafeService cafeService;

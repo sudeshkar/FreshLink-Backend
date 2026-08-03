@@ -15,12 +15,14 @@ import com.freshlink.admindto.CafeAdminResponse;
 import com.freshlink.admindto.SupplierAdminResponse;
 import com.freshlink.service.interfaces.AdminService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "Admin", description = "Account approval and lifecycle management. Requires an ADMIN token.")
 public class AdminController {
 	
 	private final AdminService adminService;

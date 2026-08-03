@@ -11,12 +11,14 @@ import com.freshlink.analytics.dto.AnalyticsResponse;
 import com.freshlink.analytics.dto.SupplierPerformanceDTO;
 import com.freshlink.service.interfaces.AnalyticsService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/admin/analytics")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "Analytics", description = "Revenue, order, and supplier performance metrics. Requires an ADMIN token.")
 public class AnalyticsController {
 	
 	private final AnalyticsService analyticsService;

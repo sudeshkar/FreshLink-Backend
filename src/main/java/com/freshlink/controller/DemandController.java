@@ -20,12 +20,14 @@ import com.freshlink.model.Cafe;
 import com.freshlink.service.interfaces.DemandService;
 
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/demand")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('CAFE')")
+@Tag(name = "Demand", description = "Forward demand requests matched against supplier daily catch. Requires a CAFE token.")
 public class DemandController {
 	
 	private final DemandService demandService;
