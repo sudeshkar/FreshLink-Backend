@@ -38,6 +38,7 @@ class RedisBackedIT {
 	@Autowired private RateLimitService rateLimitService;
 	@Autowired private CacheManager cacheManager;
 	@Autowired private AccountStatusService accountStatusService;
+	@Autowired private com.freshlink.Repository.UserRepository userRepository;
 
 	@Test
 	@DisplayName("the Redis implementation is the one actually wired in")
@@ -121,28 +122,36 @@ class RedisBackedIT {
 	}
 
 	@Test
-	@DisplayName("an answer cached by one instance is honoured by another")
-	void accountStatusIsSharedThroughRedis() {
-		// Nobody by this name exists, so the database would say "not usable".
-		// Writing to the shared cache stands in for another replica having
-		// already answered - if this instance honours it, the two are genuinely
-		// sharing state rather than each keeping a private copy.
-		String stranger = "nobody-" + System.nanoTime() + "@freshlink.test";
+	@DisplayName("status reads are served from the shared cache, not the database")
+	void accountStatusIsServedFromRedis() {
+		String email = "cafe1@freshlink.com";
 
-		assertThat(accountStatusService.isUsable(stranger))
-				.as("unknown account, straight from the database")
-				.isFalse();
-
-		assertThat(cacheManager.getCache(AccountStatusService.CACHE).get(stranger))
-				.as("@Cacheable must actually populate the shared cache - if this is "
-						+ "null the annotation is not being applied and every request "
-						+ "would hit the database")
+		// Warm the shared cache.
+		assertThat(accountStatusService.isUsable(email)).isTrue();
+		assertThat(cacheManager.getCache(AccountStatusService.CACHE).get(email))
+				.as("the answer must land in Redis, or every request would hit the database")
 				.isNotNull();
 
-		cacheManager.getCache(AccountStatusService.CACHE).put(stranger, true);
+		// Suspend the account behind the service's back. A database read would now
+		// say unusable, so a continued "usable" can only come from the cache -
+		// which is exactly the behaviour that lets a second replica agree with the
+		// first, and what bounds revocation to the cache TTL rather than the token
+		// lifetime.
+		userRepository.findByEmail(email).ifPresent(user -> {
+			user.setActive(false);
+			userRepository.save(user);
+		});
 
-		assertThat(accountStatusService.isUsable(stranger))
-				.as("the shared answer must win, which is the whole point of sharing it")
-				.isTrue();
+		try {
+			assertThat(accountStatusService.isUsable(email))
+					.as("still served from the shared cache")
+					.isTrue();
+		} finally {
+			userRepository.findByEmail(email).ifPresent(user -> {
+				user.setActive(true);
+				userRepository.save(user);
+			});
+			cacheManager.getCache(AccountStatusService.CACHE).evict(email);
+		}
 	}
 }
