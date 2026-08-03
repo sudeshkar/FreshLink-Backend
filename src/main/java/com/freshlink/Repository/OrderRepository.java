@@ -31,9 +31,16 @@ public interface OrderRepository extends JpaRepository<Order, Long>{
 
 	long countBySupplierAndStatusIn(Supplier supplier, List<OrderStatus> statuses);
 	
+	/**
+	 * Revenue means money actually earned, so only completed orders count.
+	 * Without the filter, rejected and cancelled orders were reported as revenue -
+	 * and the supplier leaderboard below already filtered on COMPLETED, so the
+	 * dashboard contradicted itself.
+	 */
 	@Query("""
 		    SELECT COALESCE(SUM(i.quantityKg * i.pricePerKg), 0)
 		    FROM Order o JOIN o.items i
+		    WHERE o.status = com.freshlink.enums.OrderStatus.COMPLETED
 		""")
 	Optional<BigDecimal> sumTotalOrderValue();
 	
@@ -48,6 +55,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>{
 		    SELECT COALESCE(SUM(i.quantityKg * i.pricePerKg), 0)
 		    FROM Order o JOIN o.items i
 		    WHERE o.createdAt >= :start
+		      AND o.status = com.freshlink.enums.OrderStatus.COMPLETED
 		""")
 		BigDecimal sumRevenueFrom(LocalDateTime start);
 	

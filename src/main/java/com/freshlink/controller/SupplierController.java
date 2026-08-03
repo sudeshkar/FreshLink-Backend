@@ -24,6 +24,9 @@ import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
 import com.freshlink.service.interfaces.SupplierService;
+import com.freshlink.routedto.RouteCreateRequest;
+import com.freshlink.routedto.RouteResponse;
+import com.freshlink.routedto.RouteStatusUpdateRequest;
 import com.freshlink.supplydto.DailySupplyCreateRequest;
 import com.freshlink.supplydto.DailySupplyResponse;
 import com.freshlink.supplydto.DailySupplyUpdateRequest;
@@ -99,6 +102,42 @@ public class SupplierController {
     	supplierService.completeOrder(orderId,auth.getName());
     }
     
+    @Operation(summary = "Plan a delivery route",
+            description = "Groups several out-for-delivery orders into one driver trip. "
+                    + "Each order must already be marked as delivering and not already routed.")
+    @PostMapping("/routes")
+    public RouteResponse createRoute(@RequestBody @Valid RouteCreateRequest dto, Authentication auth) {
+        return supplierService.createRoute(dto, auth.getName());
+    }
+
+    @GetMapping("/routes")
+    public Page<RouteResponse> getRoutes(Authentication auth,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return supplierService.getRoutes(auth.getName(), pageable);
+    }
+
+    @GetMapping("/routes/{routeId}")
+    public RouteResponse getRoute(@PathVariable Long routeId, Authentication auth) {
+        return supplierService.getRoute(routeId, auth.getName());
+    }
+
+    @Operation(summary = "Advance a route",
+            description = "PLANNED to DISPATCHED puts every stop IN_TRANSIT and stamps the driver "
+                    + "on each. DISPATCHED to COMPLETED requires every stop delivered or failed. "
+                    + "CANCELLED detaches the stops so they can be re-routed.")
+    @PutMapping("/routes/{routeId}/status")
+    public RouteResponse updateRouteStatus(
+            @PathVariable Long routeId,
+            @RequestBody @Valid RouteStatusUpdateRequest dto,
+            Authentication auth) {
+        return supplierService.updateRouteStatus(routeId, dto, auth.getName());
+    }
+
+    @DeleteMapping("/routes/{routeId}")
+    public void deleteRoute(@PathVariable Long routeId, Authentication auth) {
+        supplierService.deleteRoute(routeId, auth.getName());
+    }
+
     @Operation(summary = "Price history for one of your listings")
     @GetMapping("/fish/{id}/price-history")
     public Page<PriceHistoryResponse> fishPriceHistory(

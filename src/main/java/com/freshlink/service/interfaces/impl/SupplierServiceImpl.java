@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.freshlink.Repository.DailySupplyRepository;
+import com.freshlink.Repository.DeliveryRouteRepository;
 import com.freshlink.Repository.DeliveryRepository;
 import com.freshlink.Repository.DemandRepository;
 import com.freshlink.Repository.FishPriceHistoryRepository;
@@ -24,6 +25,7 @@ import com.freshlink.Repository.SupplierRepository;
 import com.freshlink.Repository.SupplyMatchRepository;
 import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.deliverydto.DeliveryUpdateRequest;
+import com.freshlink.enums.RouteStatus;
 import com.freshlink.enums.DeliveryStatus;
 import com.freshlink.enums.DemandStatus;
 import com.freshlink.enums.MatchStatus;
@@ -40,6 +42,7 @@ import com.freshlink.mapper.OrderMapper;
 import com.freshlink.mapper.SupplierMapper;
 import com.freshlink.mapper.SupplyMatchMapper;
 import com.freshlink.model.DailySupply;
+import com.freshlink.model.DeliveryRoute;
 import com.freshlink.model.Delivery;
 import com.freshlink.model.DemandRequest;
 import com.freshlink.model.FishPriceHistory;
@@ -54,6 +57,10 @@ import com.freshlink.notification.NotificationEvents;
 import com.freshlink.service.interfaces.DemandMatchService;
 import com.freshlink.service.interfaces.DemandMatchingScheduler;
 import com.freshlink.service.interfaces.SupplierService;
+import com.freshlink.routedto.RouteCreateRequest;
+import com.freshlink.routedto.RouteResponse;
+import com.freshlink.routedto.RouteStatusUpdateRequest;
+import com.freshlink.routedto.RouteStopResponse;
 import com.freshlink.supplydto.DailySupplyCreateRequest;
 import com.freshlink.supplydto.DailySupplyResponse;
 import com.freshlink.supplydto.DailySupplyUpdateRequest;
@@ -80,6 +87,7 @@ public class SupplierServiceImpl implements SupplierService{
     private final DemandMatchService demandMatchService;
     private final FishPriceHistoryRepository fishPriceHistoryRepository;
     private final ApplicationEventPublisher events;
+    private final DeliveryRouteRepository deliveryRouteRepository;
     
 	@Override
 	
@@ -291,6 +299,195 @@ public class SupplierServiceImpl implements SupplierService{
 		 
 	}
 	
+
+	// ---------------- DELIVERY ROUTES ----------------
+
+	/** Legal route moves; COMPLETED and CANCELLED are terminal. */
+	private static final Map<RouteStatus, Set<RouteStatus>> ALLOWED_ROUTE_MOVES = Map.of(
+			RouteStatus.PLANNED, Set.of(RouteStatus.DISPATCHED, RouteStatus.CANCELLED),
+			RouteStatus.DISPATCHED, Set.of(RouteStatus.COMPLETED, RouteStatus.CANCELLED),
+			RouteStatus.COMPLETED, Set.of(),
+			RouteStatus.CANCELLED, Set.of());
+
+	@Override
+	public RouteResponse createRoute(RouteCreateRequest dto, String supplierEmail) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+
+		DeliveryRoute route = new DeliveryRoute();
+		route.setSupplier(supplier);
+		route.setRouteDate(dto.routeDate());
+		route.setDriverName(dto.driverName());
+		route.setDriverPhone(dto.driverPhone());
+		route.setNotes(dto.notes());
+		route.setStatus(RouteStatus.PLANNED);
+		DeliveryRoute saved = deliveryRouteRepository.save(route);
+
+		for (Long orderId : dto.orderIds().stream().distinct().toList()) {
+			Order order = orderRepository.findById(orderId)
+					.filter(o -> o.getSupplier().getId().equals(supplier.getId()))
+					.orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+
+			Delivery delivery = deliveryRepository.findByOrder(order)
+					.orElseThrow(() -> new BusinessRuleException(
+							"Order %d is not out for delivery yet, so it cannot be routed."
+									.formatted(orderId)));
+
+			// A stop belongs to one van. Silently moving it would leave the other
+			// route a drop-off short with nothing to show why.
+			if (delivery.getRoute() != null && !delivery.getRoute().getId().equals(saved.getId())) {
+				throw new BusinessRuleException(
+						"Order %d is already on route %d. Remove it from that route first."
+								.formatted(orderId, delivery.getRoute().getId()));
+			}
+			if (delivery.getStatus() == DeliveryStatus.DELIVERED) {
+				throw new BusinessRuleException(
+						"Order %d has already been delivered.".formatted(orderId));
+			}
+
+			delivery.setRoute(saved);
+			deliveryRepository.save(delivery);
+		}
+
+		return toRouteResponse(saved);
+	}
+
+	@Override
+	public Page<RouteResponse> getRoutes(String supplierEmail, Pageable pageable) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+
+		return deliveryRouteRepository.findBySupplierOrderByRouteDateDesc(supplier, pageable)
+				.map(this::toRouteResponse);
+	}
+
+	@Override
+	public RouteResponse getRoute(Long routeId, String supplierEmail) {
+		return toRouteResponse(requireOwnRoute(routeId, supplierEmail));
+	}
+
+	@Override
+	public RouteResponse updateRouteStatus(Long routeId, RouteStatusUpdateRequest dto, String supplierEmail) {
+		DeliveryRoute route = requireOwnRoute(routeId, supplierEmail);
+		RouteStatus target = dto.status();
+
+		if (target != route.getStatus()
+				&& !ALLOWED_ROUTE_MOVES.getOrDefault(route.getStatus(), Set.of()).contains(target)) {
+			throw new BusinessRuleException(
+					"A route cannot move from %s to %s".formatted(route.getStatus(), target));
+		}
+
+		List<Delivery> stops = deliveryRepository.findByRoute(route);
+
+		switch (target) {
+			case DISPATCHED -> dispatch(route, stops);
+			case COMPLETED -> requireEveryStopResolved(stops);
+			case CANCELLED -> stops.forEach(stop -> {
+				// Detach rather than delete: the deliveries still have to happen,
+				// they just need putting on a different van.
+				stop.setRoute(null);
+				deliveryRepository.save(stop);
+			});
+			default -> { }
+		}
+
+		route.setStatus(target);
+		return toRouteResponse(deliveryRouteRepository.save(route));
+	}
+
+	@Override
+	public void deleteRoute(Long routeId, String supplierEmail) {
+		DeliveryRoute route = requireOwnRoute(routeId, supplierEmail);
+
+		if (route.getStatus() != RouteStatus.PLANNED) {
+			throw new BusinessRuleException(
+					"Only a route that has not been dispatched can be deleted. Cancel it instead.");
+		}
+
+		// Unassign the stops first - deleting a route must never delete deliveries.
+		deliveryRepository.findByRoute(route).forEach(stop -> {
+			stop.setRoute(null);
+			deliveryRepository.save(stop);
+		});
+
+		deliveryRouteRepository.delete(route);
+	}
+
+	/**
+	 * Dispatching is the point of a route: the driver is stamped onto every stop
+	 * at once and they all go on the road together, instead of being retyped and
+	 * advanced one delivery at a time.
+	 */
+	private void dispatch(DeliveryRoute route, List<Delivery> stops) {
+		if (stops.isEmpty()) {
+			throw new BusinessRuleException("A route with no stops cannot be dispatched");
+		}
+
+		for (Delivery stop : stops) {
+			if (stop.getStatus() == DeliveryStatus.SCHEDULED || stop.getStatus() == DeliveryStatus.FAILED) {
+				stop.setStatus(DeliveryStatus.IN_TRANSIT);
+			}
+			if (route.getDriverName() != null) {
+				stop.setDriverName(route.getDriverName());
+			}
+			if (route.getDriverPhone() != null) {
+				stop.setDriverPhone(route.getDriverPhone());
+			}
+			deliveryRepository.save(stop);
+
+			events.publishEvent(new NotificationEvents.DeliveryStatusChanged(
+					stop.getOrder().getId(),
+					stop.getOrder().getCafe().getEmail(),
+					stop.getStatus().name(),
+					stop.getDriverName(),
+					stop.getDriverPhone()));
+		}
+	}
+
+	private void requireEveryStopResolved(List<Delivery> stops) {
+		long outstanding = stops.stream()
+				.filter(s -> s.getStatus() != DeliveryStatus.DELIVERED
+						&& s.getStatus() != DeliveryStatus.FAILED)
+				.count();
+
+		if (outstanding > 0) {
+			throw new BusinessRuleException(
+					"%d stop(s) on this route have not been delivered or marked failed yet."
+							.formatted(outstanding));
+		}
+	}
+
+	private DeliveryRoute requireOwnRoute(Long routeId, String supplierEmail) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+
+		return deliveryRouteRepository.findByIdAndSupplier(routeId, supplier)
+				.orElseThrow(() -> new ResourceNotFoundException("Delivery route", routeId));
+	}
+
+	private RouteResponse toRouteResponse(DeliveryRoute route) {
+		List<RouteStopResponse> stops = deliveryRepository.findByRoute(route).stream()
+				.map(stop -> new RouteStopResponse(
+						stop.getDeliveryId(),
+						stop.getOrder().getId(),
+						stop.getOrder().getCafe().getName(),
+						stop.getOrder().getCafe().getAddress(),
+						stop.getStatus().name(),
+						stop.getExpectedAt(),
+						stop.getDeliveredAt()))
+				.toList();
+
+		return new RouteResponse(
+				route.getId(),
+				route.getRouteDate(),
+				route.getDriverName(),
+				route.getDriverPhone(),
+				route.getStatus().name(),
+				route.getNotes(),
+				stops.size(),
+				stops);
+	}
+
 	// ---------------- PRICE HISTORY ----------------
 
 	private void recordPrice(Fish fish) {
@@ -569,8 +766,23 @@ public class SupplierServiceImpl implements SupplierService{
 	    // 🔥 Find supplier's Fish by FishType
 	    Fish fish = fishRepository
 	            .findBySupplierAndFishType(supplier, fishType)
-	            .orElseThrow(() -> new RuntimeException(
-	                    "Fish not found for supplier and type"));
+	            .orElseThrow(() -> new BusinessRuleException(
+	                    "You have no %s listing to fulfil this match from. Create one first."
+	                            .formatted(fishType.getName())));
+
+	    double quantity = match.getConfirmedQuantity();
+
+	    // The order references a Fish listing, so the listing has to be reserved
+	    // exactly as a spot-market order would. Skipping this let the same kilos
+	    // stay on sale after being promised to a demand match, and left the
+	    // reservation counter to go negative when the order was later accepted.
+	    if (fish.getAvailableKg() < quantity) {
+	        throw new BusinessRuleException(
+	                "Your %s listing has only %.1f kg available but this match needs %.1f kg. Restock before accepting."
+	                        .formatted(fish.getName(), fish.getAvailableKg(), quantity));
+	    }
+	    fish.setAvailableKg(fish.getAvailableKg() - quantity);
+	    fish.setReservedKg(fish.getReservedKg() + quantity);
 
 	    Order order = new Order();
 	    order.setCafe(match.getDemandRequest().getCafe());
@@ -581,8 +793,8 @@ public class SupplierServiceImpl implements SupplierService{
 
 	    OrderItem item = new OrderItem();
 	    item.setOrder(order);
-	    item.setFish(fish); // ✅ FIXED
-	    item.setQuantityKg(match.getConfirmedQuantity());
+	    item.setFish(fish);
+	    item.setQuantityKg(quantity);
 	    item.setPricePerKg(fish.getPricePerKg());
 
 	    order.setItems(List.of(item));

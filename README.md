@@ -47,6 +47,7 @@ It runs two complementary trade flows:
 - **Tracked order lifecycle** — accept, reject, delivering and completion transitions, each a distinct authorised endpoint.
 - **Concurrency-safe stock** — reservations are guarded by an optimistic-locking version column, proven by concurrent integration tests: without it, two 60 kg orders against 100 kg of stock both succeed.
 - **Demand matching engine** — greedy allocation ranked by freshness, then supplier rating, then catch time. Re-runs every 10 minutes, allocates only the outstanding shortfall, and expires matches a supplier never answers so their supply returns to the pool.
+- **Delivery routes** — one driver, one trip, several drop-offs. Dispatching stamps the driver on every stop and puts them all on the road in one call.
 - **Delivery tracking** — driver, phone, ETA and arrival time per order, with validated status transitions. Cafés can see where their fish is.
 - **Price history** — every price a listing has charged, recorded on creation and on each change, so cafés can judge an offer and seasonal movement is visible.
 - **Post-delivery ratings** — cafés rate suppliers once an order completes, feeding both the leaderboard and the matching engine's ranking.
@@ -170,6 +171,11 @@ New accounts are created inactive and require **both** email verification and ad
 | `PUT` | `/suppliers/orders/{orderId}/complete` | Mark as delivered — also settles the delivery |
 | `GET` | `/suppliers/orders/{orderId}/delivery` | Delivery detail |
 | `PUT` | `/suppliers/orders/{orderId}/delivery` | Assign driver, set ETA, advance status |
+| `POST` | `/suppliers/routes` | Plan a route — group several delivering orders into one trip |
+| `GET` | `/suppliers/routes` | Own routes (paged) |
+| `GET` | `/suppliers/routes/{routeId}` | Route with its stops |
+| `PUT` | `/suppliers/routes/{routeId}/status` | Dispatch, complete or cancel the whole route |
+| `DELETE` | `/suppliers/routes/{routeId}` | Delete while still planned — unassigns stops, never deletes them |
 | `POST` | `/suppliers/daily-supply` | Record today's catch — triggers matching immediately |
 | `GET` | `/suppliers/daily-supply` | List own recorded catch |
 | `PUT` | `/suppliers/daily-supply/{id}` | Adjust quantity or freshness |
@@ -265,6 +271,24 @@ SCHEDULED ──▶ IN_TRANSIT ──▶ DELIVERED
 `DELIVERED` is terminal. The arrival time is stamped by the server rather than
 supplied by the caller, so a late delivery cannot be backdated. Completing the order
 settles the delivery too, so the two can never drift apart.
+
+### Routes
+
+A supplier's van goes out with several cafés on board, so deliveries group into a route.
+
+```
+PLANNED ──▶ DISPATCHED ──▶ COMPLETED
+   │             │
+   └──▶ CANCELLED ◀┘
+```
+
+Dispatching moves every `SCHEDULED` stop to `IN_TRANSIT` and stamps the driver on each,
+instead of retyping the same details per delivery. Completing requires every stop to be
+delivered or failed — a failed drop counts as resolved, so one bad address cannot block
+the van. Cancelling **detaches** the stops rather than deleting them: those deliveries
+still have to happen, just on another van.
+
+---
 
 ## Demand Matching
 
@@ -608,6 +632,7 @@ Flyway owns the schema in every environment; Hibernate is set to `validate` and 
 | `V4__supply_match_created_at` | Ages matches so abandoned ones can be expired |
 | `V5__delivery_tracking` | Driver, ETA, arrival time, and the `IN_TRANSIT`/`FAILED` states |
 | `V6__fish_price_history` | Append-only price record |
+| `V7__delivery_routes` | Driver routes, and the link from a delivery to its route |
 
 Identifiers are `snake_case` because Spring Boot applies `CamelCaseToUnderscoresNamingStrategy` — `businessRegNo` becomes `business_reg_no`. Do not rename or quote them, or schema validation stops matching.
 
@@ -691,7 +716,6 @@ Every failure returns a consistent body:
 
 ## Roadmap
 
-- [ ] Delivery route grouping across orders
 - [ ] Shared-store rate limiting (`bucket4j-redis`) before running more than one instance
 - [ ] WebSocket or push notifications alongside email
 - [ ] Market-wide price analytics per fish type, not just per listing

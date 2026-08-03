@@ -9,6 +9,9 @@ import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.deliverydto.DeliveryUpdateRequest;
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.PriceHistoryResponse;
+import com.freshlink.routedto.RouteCreateRequest;
+import com.freshlink.routedto.RouteResponse;
+import com.freshlink.routedto.RouteStatusUpdateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
@@ -43,6 +46,20 @@ public interface SupplierService {
 
 	/** What this listing has charged over time, newest first. */
 	Page<PriceHistoryResponse> getFishPriceHistory(Long fishId, String supplierEmail, Pageable pageable);
+
+	// ---- Delivery routes: one driver, one trip, several drop-offs ----
+
+	RouteResponse createRoute(RouteCreateRequest dto, String supplierEmail);
+
+	Page<RouteResponse> getRoutes(String supplierEmail, Pageable pageable);
+
+	RouteResponse getRoute(Long routeId, String supplierEmail);
+
+	/** Dispatching moves every stop onto the road and stamps the driver on each. */
+	RouteResponse updateRouteStatus(Long routeId, RouteStatusUpdateRequest dto, String supplierEmail);
+
+	/** Only while still planned. Deletes the route, never its deliveries. */
+	void deleteRoute(Long routeId, String supplierEmail);
 
 	// ---- Delivery ----
 
