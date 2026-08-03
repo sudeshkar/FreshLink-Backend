@@ -32,6 +32,7 @@ It runs two complementary trade flows:
 - **Ownership enforced in the service layer** — a café can only ever read or modify its own orders and demand; a supplier only its own listings and matches. Checks live below the controller so they cannot be bypassed by a new caller.
 - **JWT authentication with refresh tokens** — short-lived access tokens backed by a persisted refresh-token store, so sessions survive without long-lived credentials.
 - **Email OTP verification** — 6-digit codes via SMTP, 5-minute expiry, capped retry attempts before invalidation.
+- **Rate-limited auth endpoints** — token-bucket caps on login and OTP issuance, per client IP and per email address, so credential stuffing and inbox flooding both hit a wall.
 - **Supplier fish catalogue** — full CRUD over listings, scoped so a supplier can only touch their own inventory.
 - **Café marketplace search** — browse available fish filtered by species and city. Suspended and removed suppliers never appear.
 - **Tracked order lifecycle** — orders move through accept, reject, delivering, and completion transitions, each a distinct authorised endpoint.
@@ -311,6 +312,10 @@ The committed profile files contain only `${ENV_VAR}` references, which is why t
 | `JWT_SECRET` | **Minimum 32 bytes.** HS256 rejects anything shorter, and startup fails with an explicit message. |
 | `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP credentials for OTP delivery |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins |
+| `RATELIMIT_LOGIN_CAPACITY` | Sign-in attempts per window (default 5) |
+| `RATELIMIT_LOGIN_WINDOW` | Window in minutes (default 15) |
+| `RATELIMIT_OTP_CAPACITY` | OTP requests per window (default 3) |
+| `RATELIMIT_OTP_WINDOW` | Window in minutes (default 15) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap admin — omit to skip creation |
 
 ```bash
@@ -371,6 +376,7 @@ Every failure returns a consistent body:
 | `403` | Authenticated but wrong role |
 | `404` | Not found — **also returned when a resource exists but belongs to someone else**, so IDs cannot be enumerated |
 | `409` | Domain rule violation, or a concurrent stock update — safe to retry |
+| `429` | Rate limit exceeded on an auth endpoint |
 | `500` | Unexpected. Details are logged, never returned. |
 
 ---
@@ -392,7 +398,6 @@ Every failure returns a consistent body:
 
 ## Roadmap
 
-- [ ] Rate limiting on login and OTP request endpoints
 - [ ] Hashed, rotating refresh tokens
 - [ ] Delivery assignment and route grouping
 - [ ] Integration test coverage across the order lifecycle

@@ -1,6 +1,7 @@
 package com.freshlink.service.interfaces.impl;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
@@ -8,8 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.freshlink.Repository.OtpRepository;
 import com.freshlink.Repository.UserRepository;
+import com.freshlink.exception.RateLimitExceededException;
 import com.freshlink.model.OtpVerification;
 import com.freshlink.model.User;
+import com.freshlink.security.RateLimitService;
 import com.freshlink.service.interfaces.EmailService;
 import com.freshlink.service.interfaces.OtpService;
 
@@ -23,13 +26,25 @@ public class OtpServiceImpl implements OtpService {
 	private static final int MAX_ATTEMPTS = 3;
 	private static final int VALIDITY_MINUTES = 5;
 
+	/** Codes per address per window, independent of where the request came from. */
+	private static final int MAX_CODES_PER_EMAIL = 3;
+	private static final Duration EMAIL_WINDOW = Duration.ofMinutes(15);
+
 	private final OtpRepository otpRepository;
 	private final EmailService emailService;
 	private final UserRepository userRepository;
+	private final RateLimitService rateLimitService;
 
 	@Override
 	@Transactional
 	public void sendOtp(String email) {
+		// Capped per address as well as per IP: the filter's IP limit alone would
+		// still let a rotating pool of addresses bury one inbox in codes.
+		if (!rateLimitService.tryConsume("otp-email|" + email, MAX_CODES_PER_EMAIL, EMAIL_WINDOW)) {
+			throw new RateLimitExceededException(
+					"Too many verification codes requested for this address. Please try again later.");
+		}
+
 		// Invalidate any previous codes so only the newest one is usable and
 		// stale rows do not accumulate.
 		otpRepository.deleteByEmail(email);

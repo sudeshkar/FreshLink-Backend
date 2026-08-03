@@ -37,6 +37,11 @@ public class GlobalExceptionHandler {
 				"This item was updated by someone else. Please retry.", request);
 	}
 
+	@ExceptionHandler(RateLimitExceededException.class)
+	public ResponseEntity<ApiError> handleRateLimit(RateLimitExceededException ex, WebRequest request) {
+		return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
+	}
+
 	@ExceptionHandler(AccessDeniedException.class)
 	public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
 		return build(HttpStatus.FORBIDDEN, "Access denied", request);

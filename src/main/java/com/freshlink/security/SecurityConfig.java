@@ -3,6 +3,7 @@ package com.freshlink.security;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -38,7 +39,8 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	public SecurityFilterChain filterChain(HttpSecurity http, JwtFilter jwtFilter) throws Exception {
+	public SecurityFilterChain filterChain(HttpSecurity http, JwtFilter jwtFilter,
+			RateLimitFilter rateLimitFilter) throws Exception {
 		http
 				// Safe to disable: authentication is carried by a bearer token, not a
 				// cookie, and sessions are stateless - so there is no ambient authority
@@ -59,9 +61,33 @@ public class SecurityConfig {
 								writeError(response, HttpStatus.UNAUTHORIZED, "Authentication required"))
 						.accessDeniedHandler((request, response, accessDeniedException) ->
 								writeError(response, HttpStatus.FORBIDDEN, "Access denied")))
+				// Both are inserted ahead of the username/password filter, in the order
+				// added: rate limiting first, so a throttled request costs nothing
+				// beyond the check itself.
+				.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
 				.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
+	}
+
+	/**
+	 * Filters annotated with {@code @Component} are picked up by Boot's servlet
+	 * auto-registration as well as by the security chain, so they run twice per
+	 * request. Harmless for JwtFilter, but it would make RateLimitFilter spend two
+	 * tokens per call and halve every configured allowance.
+	 */
+	@Bean
+	public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RateLimitFilter filter) {
+		FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+		registration.setEnabled(false);
+		return registration;
+	}
+
+	@Bean
+	public FilterRegistrationBean<JwtFilter> jwtFilterRegistration(JwtFilter filter) {
+		FilterRegistrationBean<JwtFilter> registration = new FilterRegistrationBean<>(filter);
+		registration.setEnabled(false);
+		return registration;
 	}
 
 	@Bean
