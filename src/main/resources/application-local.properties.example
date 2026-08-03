@@ -1,0 +1,20 @@
+# ============================================================
+# Template for per-developer secrets.
+#
+#   copy  application-local.properties.example
+#     ->  application-local.properties      (git-ignored)
+#
+# Loaded automatically via spring.config.import in application.properties
+# and overrides anything set by the active profile.
+# ============================================================
+
+# Your local Postgres credentials
+#spring.datasource.username=postgres
+#spring.datasource.password=your-local-db-password
+
+# Gmail account + app password, if you want OTP mails to actually send
+#spring.mail.username=you@gmail.com
+#spring.mail.password=your-16-char-app-password
+
+# Override the dev signing key if you like
+#jwt.secret=at-least-32-bytes-of-random-text-goes-right-here

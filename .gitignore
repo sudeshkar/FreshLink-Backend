@@ -36,14 +36,11 @@ build/
 .env
 .env.*
 
-# Spring Boot application config
-application.properties
-application-*.properties
-
-# Spring Boot resources
-src/main/resources/application.properties
-src/main/resources/application-*.properties
-
-!application-example.properties
+# Spring Boot config
+# The profile files (application[-dev|-prod].properties) are committed on
+# purpose: they hold no secrets, only ${ENV_VAR} references. Only the
+# per-developer override file, which does hold real credentials, is ignored.
+application-local.properties
+src/main/resources/application-local.properties
 
 /bin/
