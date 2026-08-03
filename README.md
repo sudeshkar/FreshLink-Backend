@@ -57,7 +57,7 @@ It runs two complementary trade flows:
 - **Three-role access model** — `SUPPLIER`, `CAFE`, `ADMIN`, enforced with method-level `@PreAuthorize` on every controller.
 - **Ownership enforced in the service layer** — below the controller, so it cannot be bypassed by a new caller.
 - **JWT auth with rotating refresh tokens** — hashed at rest, rotated on every use, replay treated as theft.
-- **Rate-limited auth endpoints** — token-bucket caps per IP and per email address.
+- **Rate-limited auth endpoints** — token-bucket caps per IP and per email address, in-process or shared through Redis.
 - **Email OTP verification** — 6-digit codes, 5-minute expiry, capped attempts.
 - **Transactional notifications** — sent after commit on a background pool, so mail never delays or fails a request.
 - **Admin oversight** — account activation, soft deletion with safeguards, analytics dashboard.
@@ -435,7 +435,9 @@ export JWT_SECRET=at-least-32-characters-of-random-text-here
 docker compose up --build
 ```
 
-Brings up Postgres and the API together. The app waits for the database to pass
+Brings up Postgres, Redis and the API together, with the Redis-backed limiter and cache
+enabled so `docker compose up --scale app=3` behaves correctly rather than tripling every
+rate limit. The app waits for the database to pass
 its healthcheck before starting, so Flyway does not race it.
 
 Compose runs the **prod** profile, which by design has no fallback values — every
@@ -504,8 +506,8 @@ correct password too — counting only failures would let an attacker reset thei
 with one valid login. The per-email cap exists because an IP-only limit still lets a
 rotating pool of addresses bury one inbox in codes.
 
-> Buckets are in-memory and per-instance, so two replicas double the effective allowance.
-> Moving to `bucket4j-redis` is required before scaling horizontally.
+Buckets are in-process by default. Set `RATELIMIT_BACKEND=redis` to share them across
+instances — with per-process buckets, three replicas turn a five-attempt limit into fifteen.
 
 ### Account lifecycle
 
@@ -522,8 +524,11 @@ re-register on the same address to shed its rating history.
 
 A signed token is valid until it expires, so suspending an account would otherwise leave it
 working for the rest of that token's lifetime. Every authenticated request checks whether the
-account is still usable, through a cache swept once a minute — so revocation takes effect in
-about a minute, at roughly one query per user per minute rather than one per request.
+account is still usable, through a cache expiring after a minute — so revocation takes effect
+in about a minute, at roughly one query per user per minute rather than one per request.
+
+Set `CACHE_BACKEND=redis` to share that answer across instances; otherwise each replica keeps
+its own copy and one can still accept a suspended account after another has noticed.
 
 ### Observability
 
@@ -587,6 +592,7 @@ found it, because they all mock the repository.
 - **`ConcurrentOrderIT`** — genuine concurrent transactions fired from a latch, proving the optimistic lock on stock.
 - **`RevenueAccountingIT`** — revenue is recognised only on completion. JPQL semantics cannot be proven against a mocked repository, so this runs the real query.
 - **`MarketAnalyticsIT`** — the market spread and price trend, for the same reason: aggregates are only meaningful against a real database.
+- **`RedisBackedIT`** — the shared limiter and cache against a real Redis. Skipped unless `REDIS_HOST` is set, which CI provides; a skipped test says so rather than a passing one proving nothing.
 
 ### On the concurrency tests
 
@@ -648,6 +654,9 @@ The committed profile files contain only `${ENV_VAR}` references, which is why t
 | `MATCH_PENDING_TIMEOUT_HOURS` | How long a supplier has to answer a match (default 24) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap admin — omit to skip creation |
 | `NOTIFICATIONS_ENABLED` | Set `false` to suppress outbound email |
+| `RATELIMIT_BACKEND` | `memory` (default) or `redis` — shared buckets across instances |
+| `CACHE_BACKEND` | `simple` (default) or `redis` — shared caches across instances |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_ENABLED` | Only needed when either backend is `redis` |
 
 ```bash
 java -jar target/freshlink-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
@@ -743,7 +752,7 @@ Every failure returns a consistent body:
 | Database | PostgreSQL |
 | Migrations | Flyway |
 | Auth | Spring Security + JJWT 0.12, hashed rotating refresh tokens |
-| Rate limiting | Bucket4j |
+| Rate limiting | Bucket4j, optionally Redis-backed |
 | API docs | springdoc-openapi (Swagger UI) |
 | Build | Maven Wrapper, Surefire + Failsafe |
 | Testing | JUnit 5, Mockito, AssertJ, MockMvc |
@@ -755,8 +764,6 @@ Every failure returns a consistent body:
 
 ## Roadmap
 
-- [ ] Shared-store rate limiting (`bucket4j-redis`) before running more than one instance
-- [ ] Shared account-status cache, for the same reason
 - [ ] WebSocket or push notifications alongside email
 - [ ] Demand-side analytics for suppliers deciding what to buy at market
 

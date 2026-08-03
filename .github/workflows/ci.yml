@@ -21,6 +21,18 @@ jobs:
     services:
       # The context-load test and Flyway both need a real database; the schema
       # is PostgreSQL-specific, so an in-memory substitute would not prove much.
+      # Redis is optional at runtime, but the Redis-backed limiter and cache
+      # cannot be verified without it, and this machine has no Docker.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
       postgres:
         image: postgres:16-alpine
         env:
@@ -52,6 +64,9 @@ jobs:
           DB_PASSWORD: postgres
           # Must clear the 32-byte minimum JwtUtil enforces at startup.
           JWT_SECRET: ci-only-signing-key-not-used-anywhere-else-0123456789
+          # Presence of this enables RedisBackedIT, which is skipped otherwise.
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
         run: mvn -B verify
 
       - name: Publish test report

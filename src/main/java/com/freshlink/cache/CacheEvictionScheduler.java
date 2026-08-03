@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -12,7 +13,12 @@ import com.freshlink.security.AccountStatusService;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Sweeps the in-process caches, which have no TTL of their own. Redis caches
+ * carry real TTLs, so this is not created when they are in use.
+ */
 @Component
+@ConditionalOnProperty(name = "app.cache.backend", havingValue = "simple", matchIfMissing = true)
 @RequiredArgsConstructor
 public class CacheEvictionScheduler {
 	

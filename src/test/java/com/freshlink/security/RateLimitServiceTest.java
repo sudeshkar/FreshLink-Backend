@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class RateLimitServiceTest {
 
-	private final RateLimitService rateLimitService = new RateLimitService();
+	private final InMemoryRateLimitService rateLimitService = new InMemoryRateLimitService();
 
 	@Test
 	@DisplayName("allows exactly the configured capacity, then refuses")
