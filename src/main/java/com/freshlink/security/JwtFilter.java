@@ -24,6 +24,7 @@ public class JwtFilter extends OncePerRequestFilter{
 	
  
 	 private final JwtUtil jwtUtil;
+	 private final AccountStatusService accountStatusService;
 
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, 
@@ -36,6 +37,16 @@ public class JwtFilter extends OncePerRequestFilter{
             if (jwtUtil.validateToken(token)){
                 String email = jwtUtil.extractEmail(token);
                 String role = jwtUtil.extractRole(token);
+
+                // A signed token stays valid until it expires, so without this a
+                // suspended or removed account would keep working for the rest of
+                // its lifetime. The lookup is cached, so this costs roughly one
+                // query per user per minute rather than one per request.
+                if (!accountStatusService.isUsable(email)) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(email,null,List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                 authentication.setDetails(
                         new WebAuthenticationDetailsSource().buildDetails(request)

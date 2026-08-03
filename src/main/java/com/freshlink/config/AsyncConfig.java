@@ -1,8 +1,10 @@
 package com.freshlink.config;
 
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -35,6 +37,24 @@ public class AsyncConfig {
 		// Let in-flight mail finish on shutdown rather than cutting it off.
 		executor.setWaitForTasksToCompleteOnShutdown(true);
 		executor.setAwaitTerminationSeconds(20);
+
+		// Without this the notification lines carry no request id: MDC is
+		// thread-local, and the pool threads never saw the caller's context.
+		// Must be set before initialize() or the pool is built without it.
+		executor.setTaskDecorator(task -> {
+			Map<String, String> caller = MDC.getCopyOfContextMap();
+			return () -> {
+				if (caller != null) {
+					MDC.setContextMap(caller);
+				}
+				try {
+					task.run();
+				} finally {
+					MDC.clear();
+				}
+			};
+		});
+
 		executor.initialize();
 		return executor;
 	}

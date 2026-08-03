@@ -14,7 +14,10 @@ public class CacheConfig {
         return new ConcurrentMapCacheManager(
             "admin-dashboard",
             "supplier-analytics",
-            "cafe-analytics"
+            "cafe-analytics",
+            // Swept every minute by CacheEvictionScheduler, which is what bounds
+            // how long a suspended account keeps working.
+            "account-status"
         );
     }
 }

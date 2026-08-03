@@ -508,6 +508,20 @@ Removed suppliers are excluded from the market, from matching, and from direct o
 fish id. Email addresses are deliberately **not** released, so a removed supplier cannot
 re-register on the same address to shed its rating history.
 
+### Revoking access
+
+A signed token is valid until it expires, so suspending an account would otherwise leave it
+working for the rest of that token's lifetime. Every authenticated request checks whether the
+account is still usable, through a cache swept once a minute — so revocation takes effect in
+about a minute, at roughly one query per user per minute rather than one per request.
+
+### Observability
+
+Every request carries an `X-Request-Id`, generated if the caller does not supply one and
+echoed back on the response. It appears in each log line for that request, and is propagated
+onto the notification pool — so work that happens after the response, on another thread, is
+still traceable to the request that caused it.
+
 ### Other measures
 
 - Sessions are stateless; CSRF is disabled because there is no cookie-borne ambient authority to protect.
@@ -731,6 +745,7 @@ Every failure returns a consistent body:
 ## Roadmap
 
 - [ ] Shared-store rate limiting (`bucket4j-redis`) before running more than one instance
+- [ ] Shared account-status cache, for the same reason
 - [ ] WebSocket or push notifications alongside email
 - [ ] Market-wide price analytics per fish type, not just per listing
 - [ ] Richer demand analytics for suppliers deciding what to buy at market
