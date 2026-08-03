@@ -54,9 +54,7 @@ public class AuthServiceImpl implements AuthService{
                 principal.getUser().getRole()
         );
 		
-		String refreshToken = refreshTokenService
-                .createToken(principal.getUsername())
-                .getToken();
+		String refreshToken = refreshTokenService.createToken(principal.getUsername());
 		
 		return new AuthResponseDto(
                 accessToken,
@@ -67,16 +65,9 @@ public class AuthServiceImpl implements AuthService{
 
 	@Override
 	public AuthResponseDto refresh(RefreshTokenRequestDto dto) {
-		String newAccessToken =
-                refreshTokenService.refreshAccessToken(dto.refreshToken());
-		
-		String role =refreshTokenService.getRoleByRefreshToken(dto.refreshToken());
-
-        return new AuthResponseDto(
-                newAccessToken,
-                dto.refreshToken(),
-                role
-        );
+		// Rotation: the response carries a *new* refresh token and the one just
+		// presented stops working. Clients must store what comes back.
+		return refreshTokenService.rotate(dto.refreshToken());
 	}
 
 	@Override

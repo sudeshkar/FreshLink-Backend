@@ -30,7 +30,7 @@ It runs two complementary trade flows:
 
 - **Three-role access model** — `SUPPLIER`, `CAFE`, and `ADMIN`, enforced with method-level `@PreAuthorize` guards on every controller.
 - **Ownership enforced in the service layer** — a café can only ever read or modify its own orders and demand; a supplier only its own listings and matches. Checks live below the controller so they cannot be bypassed by a new caller.
-- **JWT authentication with refresh tokens** — short-lived access tokens backed by a persisted refresh-token store, so sessions survive without long-lived credentials.
+- **JWT authentication with rotating refresh tokens** — refresh tokens are stored only as SHA-256 hashes and rotate on every use. Replaying a spent token is treated as theft and revokes every session for that account.
 - **Email OTP verification** — 6-digit codes via SMTP, 5-minute expiry, capped retry attempts before invalidation.
 - **Rate-limited auth endpoints** — token-bucket caps on login and OTP issuance, per client IP and per email address, so credential stuffing and inbox flooding both hit a wall.
 - **Supplier fish catalogue** — full CRUD over listings, scoped so a supplier can only touch their own inventory.
@@ -89,7 +89,7 @@ Base path: `/api/v1`. Everything except `/auth/**` requires `Authorization: Bear
 | `POST` | `/auth/request-otp` | Send a verification OTP to an email |
 | `POST` | `/auth/verify-otp` | Confirm the OTP and verify the account |
 | `POST` | `/auth/login` | Authenticate, receive access + refresh tokens |
-| `POST` | `/auth/refresh` | Exchange a refresh token for a new access token |
+| `POST` | `/auth/refresh` | Exchange a refresh token for a new access token **and a new refresh token** — store both, the old one stops working |
 | `POST` | `/auth/logout` | Invalidate the refresh token |
 
 New accounts are created inactive and require **both** email verification and admin activation before login succeeds.
@@ -372,7 +372,7 @@ Every failure returns a consistent body:
 | Status | Meaning |
 | :--- | :--- |
 | `400` | Validation failure (with `fieldErrors`) |
-| `401` | Missing or invalid token |
+| `401` | Missing or invalid access token, or a refresh token that is unknown, expired, already used, or belongs to a suspended account |
 | `403` | Authenticated but wrong role |
 | `404` | Not found — **also returned when a resource exists but belongs to someone else**, so IDs cannot be enumerated |
 | `409` | Domain rule violation, or a concurrent stock update — safe to retry |
@@ -398,7 +398,6 @@ Every failure returns a consistent body:
 
 ## Roadmap
 
-- [ ] Hashed, rotating refresh tokens
 - [ ] Delivery assignment and route grouping
 - [ ] Integration test coverage across the order lifecycle
 - [ ] Pagination on list endpoints
