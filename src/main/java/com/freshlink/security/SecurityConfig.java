@@ -53,6 +53,10 @@ public class SecurityConfig {
 						// API documentation. Exposed in dev; put these behind your
 						// ingress or set springdoc.api-docs.enabled=false in prod.
 						.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+						// Orchestrators and load balancers probe these before a token
+						// exists. Only health/info are exposed at all, and prod hides
+						// the details.
+						.requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
 						.anyRequest().authenticated())
 				// Without these, an unauthenticated API call gets Spring's default HTML
 				// error page instead of a clean 401/403.

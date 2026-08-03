@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    services:
+      # The context-load test and Flyway both need a real database; the schema
+      # is PostgreSQL-specific, so an in-memory substitute would not prove much.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: FL_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build and test
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/FL_db
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          # Must clear the 32-byte minimum JwtUtil enforces at startup.
+          JWT_SECRET: ci-only-signing-key-not-used-anywhere-else-0123456789
+        run: mvn -B verify
+
+      - name: Publish test report
+        # Runs even when tests fail, which is exactly when the report matters.
+        if: always()
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: '**/target/surefire-reports/TEST-*.xml'
+          fail_on_failure: true
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        # Not pushed anywhere; this only proves the Dockerfile still builds.
+        run: docker build -t freshlink-backend:${{ github.sha }} .

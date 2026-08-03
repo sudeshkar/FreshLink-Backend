@@ -1,0 +1,19 @@
+target/
+.git/
+.github/
+.mvn/
+mvnw
+mvnw.cmd
+.idea/
+.vscode/
+.settings/
+.classpath
+.project
+*.iml
+HELP.md
+README.md
+docker-compose.yml
+Dockerfile
+# Never let a developer's local credentials into an image layer.
+src/main/resources/application-local.properties
+.env

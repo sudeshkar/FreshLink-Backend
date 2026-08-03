@@ -42,6 +42,7 @@ It runs two complementary trade flows:
 - **Admin oversight** — account activation, soft deletion with safeguards, and an analytics dashboard.
 - **Versioned schema** — Flyway owns every table; Hibernate only validates.
 - **Interactive API docs** — Swagger UI with JWT authorisation wired in, for building against the API without guesswork.
+- **Container-ready** — multi-stage Dockerfile, Compose stack with Postgres, and health/readiness probes wired for orchestration.
 
 ---
 
@@ -291,6 +292,47 @@ deliberately rather than by default.
 
 ---
 
+## Running with Docker
+
+```bash
+export JWT_SECRET=at-least-32-characters-of-random-text-here
+docker compose up --build
+```
+
+Brings up Postgres and the API together. The app waits for the database to pass
+its healthcheck before starting, so Flyway does not race it.
+
+Compose runs the **prod** profile, which by design has no fallback values — every
+variable in the table below must be set or startup fails loudly.
+
+### Health probes
+
+| Endpoint | Purpose |
+| :--- | :--- |
+| `/actuator/health` | Overall status |
+| `/actuator/health/readiness` | Ready to serve — includes a database check |
+| `/actuator/health/liveness` | Process is alive |
+
+Only `health` and `info` are exposed. `env`, `beans`, `configprops` and
+`heapdump` stay off — they leak configuration and internals.
+
+Mail is deliberately excluded from health: OTP delivery failing does not stop the
+API serving traffic, and letting an SMTP blip mark the app DOWN invites an
+orchestrator to restart a process that is working fine.
+
+---
+
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on every push and pull request to `main`:
+
+- `mvn verify` against a real PostgreSQL service container — the schema is
+  PostgreSQL-specific, so an in-memory substitute would not prove much
+- JUnit results published to the run summary, including on failure
+- A Docker image build, to catch a broken Dockerfile before deploy time
+
+---
+
 ## Configuration
 
 Configuration is split so that **no secret is ever committed**:
@@ -401,7 +443,6 @@ Every failure returns a consistent body:
 - [ ] Delivery assignment and route grouping
 - [ ] Integration test coverage across the order lifecycle
 - [ ] Pagination on list endpoints
-- [ ] Containerised deployment
 
 ---
 
