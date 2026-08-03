@@ -6,6 +6,7 @@ import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.supplymatch.dto.SupplyMatchResponse;
 import com.freshlink.userprofiledto.SupplierProfileResponse;
 
 public interface SupplierService {
@@ -28,4 +29,10 @@ public interface SupplierService {
 		void markDelivering(Long orderId, String supplierEmail);
 
 		void completeOrder(Long orderId, String supplierEmail);
+
+		List<SupplyMatchResponse> getPendingMatches(String supplierEmail);
+
+		void acceptMatch(Long id, String supplierEmail);
+
+		void rejectMatch(Long id, String supplierEmail);
 }

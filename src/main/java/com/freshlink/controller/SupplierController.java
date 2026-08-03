@@ -18,6 +18,7 @@ import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
 import com.freshlink.service.interfaces.SupplierService;
+import com.freshlink.supplymatch.dto.SupplyMatchResponse;
 import com.freshlink.userprofiledto.SupplierProfileResponse;
 
 import lombok.RequiredArgsConstructor;
@@ -81,10 +82,26 @@ public class SupplierController {
     	supplierService.markDelivering(orderId,auth.getName());
     }
     
-    @PutMapping("/orders/{orderId}/completeorder")
+    @PutMapping("/orders/{orderId}/complete")
     public void completeOrder(@PathVariable Long orderId,Authentication auth) {
     	supplierService.completeOrder(orderId,auth.getName());
     }
+    
+    @GetMapping("/supply-matches")
+    public List<SupplyMatchResponse> myMatches(Authentication auth) {
+        return supplierService.getPendingMatches(auth.getName());
+    }
+    
+    @PutMapping("/supply-matches/{id}/accept")
+    public void accept(@PathVariable Long id, Authentication auth) {
+        supplierService.acceptMatch(id, auth.getName());
+    }
+    
+    @PutMapping("/supply-matches/{id}/reject")
+    public void reject(@PathVariable Long id, Authentication auth) {
+        supplierService.rejectMatch(id, auth.getName());
+    }
+
     
     
     

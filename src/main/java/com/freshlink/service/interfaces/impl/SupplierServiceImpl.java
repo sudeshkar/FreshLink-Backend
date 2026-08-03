@@ -1,29 +1,47 @@
 package com.freshlink.service.interfaces.impl;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.freshlink.Repository.DailySupplyRepository;
+import com.freshlink.Repository.DeliveryRepository;
+import com.freshlink.Repository.DemandRepository;
 import com.freshlink.Repository.FishRepository;
 import com.freshlink.Repository.FishTypeRepository;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.Repository.SupplierRepository;
+import com.freshlink.Repository.SupplyMatchRepository;
+import com.freshlink.enums.DeliveryStatus;
+import com.freshlink.enums.DemandStatus;
+import com.freshlink.enums.MatchStatus;
 import com.freshlink.enums.OrderStatus;
+import com.freshlink.enums.SupplyStatus;
+import com.freshlink.exception.BusinessRuleException;
+import com.freshlink.exception.ResourceNotFoundException;
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.mapper.FishMapper;
 import com.freshlink.mapper.OrderMapper;
 import com.freshlink.mapper.SupplierMapper;
+import com.freshlink.mapper.SupplyMatchMapper;
+import com.freshlink.model.DailySupply;
+import com.freshlink.model.Delivery;
+import com.freshlink.model.DemandRequest;
 import com.freshlink.model.Fish;
 import com.freshlink.model.FishType;
 import com.freshlink.model.Order;
 import com.freshlink.model.OrderItem;
 import com.freshlink.model.Supplier;
+import com.freshlink.model.SupplyMatch;
 import com.freshlink.orderdto.OrderResponse;
 import com.freshlink.service.interfaces.SupplierService;
+import com.freshlink.supplymatch.dto.SupplyMatchResponse;
 import com.freshlink.userprofiledto.SupplierProfileResponse;
 
 import lombok.RequiredArgsConstructor;
@@ -38,6 +56,10 @@ public class SupplierServiceImpl implements SupplierService{
     private final SupplierMapper supplierMapper;
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
+    private final SupplyMatchRepository supplyMatchRepository;
+    private final DailySupplyRepository dailySupplyRepository;
+    private final DemandRepository demandRepository;
+    private final DeliveryRepository deliveryRepository;
     
 	@Override
 	
@@ -77,12 +99,9 @@ public class SupplierServiceImpl implements SupplierService{
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
 		
 		Fish fish = fishRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Fish not found"));
-		
-		 if (!fish.getSupplier().getId().equals(supplier.getId())) {
-	            throw new RuntimeException("Unauthorized");
-	        }
-		 
+				.filter(f -> f.getSupplier().getId().equals(supplier.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Fish", id));
+
 		 if (dto.name() != null && !dto.name().isBlank()) {
 		        fish.setName(dto.name());
 		    }
@@ -106,11 +125,8 @@ public class SupplierServiceImpl implements SupplierService{
 	                .orElseThrow(() -> new RuntimeException("Supplier not found"));
 
 	        Fish fish = fishRepository.findById(id)
-	                .orElseThrow(() -> new RuntimeException("Fish not found"));
-
-	        if (!fish.getSupplier().getId().equals(supplier.getId())) {
-	            throw new RuntimeException("Unauthorized");
-	        }
+	                .filter(f -> f.getSupplier().getId().equals(supplier.getId()))
+	                .orElseThrow(() -> new ResourceNotFoundException("Fish", id));
 
 	        fishRepository.delete(fish);
 		
@@ -141,6 +157,10 @@ public class SupplierServiceImpl implements SupplierService{
 	         
 	    }
 		 order.setStatus(OrderStatus.ACCEPTED);
+		 
+		 
+		  
+		 
 		 return orderMapper.toOrderResponse(order);
  
 		
@@ -185,6 +205,12 @@ public class SupplierServiceImpl implements SupplierService{
 	    }
 		
 		order.setStatus(OrderStatus.DELIVERING);
+		Delivery delivery = new Delivery();
+		delivery.setDeliveryDate(LocalDateTime.now());
+		delivery.setOrder(order);
+		delivery.setStatus(DeliveryStatus.SCHEDULED);
+		
+		deliveryRepository.save(delivery);
 		
 	}
 	
@@ -205,13 +231,114 @@ public class SupplierServiceImpl implements SupplierService{
 		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
 	            .orElseThrow(() -> new RuntimeException("Supplier not found"));
 
-	    Order order = orderRepository.findById(orderId)
-	            .orElseThrow(() -> new RuntimeException("Order not found"));
+	    return orderRepository.findById(orderId)
+	            .filter(order -> order.getSupplier().getId().equals(supplier.getId()))
+	            .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+	}
+	@Override
+	public List<SupplyMatchResponse> getPendingMatches(String supplierEmail) {
+		
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+	            .orElseThrow(() -> new RuntimeException("Supplier not found"));
+		
+		 List<SupplyMatch> supplyMatches = supplyMatchRepository.findByDailySupply_SupplierAndStatus(supplier,MatchStatus.PENDING);
+		 List<SupplyMatchResponse> responses = new ArrayList<SupplyMatchResponse>();
+		 
+		 for (SupplyMatch supplyMatch : supplyMatches) {
+			 SupplyMatchResponse response =SupplyMatchMapper.toResponse(supplyMatch);
+			 responses.add(response);
+		}
+		 
+		 return responses;
+		 
+	}
+	
+	/**
+	 * Loads a match only if it belongs to the calling supplier's own daily supply.
+	 * 404 rather than 403 on a mismatch: a 403 would confirm the id exists and let
+	 * one supplier enumerate another's matches.
+	 */
+	private SupplyMatch requireOwnMatch(Long matchId, String supplierEmail) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 
-	    if (!order.getSupplier().getId().equals(supplier.getId())) {
-	        throw new RuntimeException("Unauthorized");
+		return supplyMatchRepository.findById(matchId)
+				.filter(match -> match.getDailySupply().getSupplier().getId().equals(supplier.getId()))
+				.orElseThrow(() -> new ResourceNotFoundException("Supply match", matchId));
+	}
+
+	@Override
+	public void acceptMatch(Long id, String supplierEmail) {
+
+		SupplyMatch match = requireOwnMatch(id, supplierEmail);
+
+	    if (match.getStatus() != MatchStatus.PENDING) {
+	        throw new BusinessRuleException("Match already processed");
 	    }
 
-	    return order;
+	    DailySupply supply = match.getDailySupply();
+
+	    // Deduct quantity ONLY here
+	    double remainingQty = supply.getQuantity() - match.getConfirmedQuantity();
+	    supply.setQuantity(remainingQty);
+
+	    if (remainingQty == 0) {
+	        supply.setStatus(SupplyStatus.EXHAUSTED);
+	    }
+
+	    dailySupplyRepository.save(supply);
+
+	    match.setStatus(MatchStatus.ACCEPTED);
+	    supplyMatchRepository.save(match);
+
+	    // Create order
+	    createOrderFromMatch(match);
+		
+	}
+	
+	private void createOrderFromMatch(SupplyMatch match) {
+
+	    DailySupply supply = match.getDailySupply();
+	    Supplier supplier = supply.getSupplier();
+	    FishType fishType = match.getDemandRequest().getFishType();
+
+	    // 🔥 Find supplier's Fish by FishType
+	    Fish fish = fishRepository
+	            .findBySupplierAndFishType(supplier, fishType)
+	            .orElseThrow(() -> new RuntimeException(
+	                    "Fish not found for supplier and type"));
+
+	    Order order = new Order();
+	    order.setCafe(match.getDemandRequest().getCafe());
+	    order.setSupplier(supplier);
+	    order.setStatus(OrderStatus.REQUESTED);
+
+	    OrderItem item = new OrderItem();
+	    item.setOrder(order);
+	    item.setFish(fish); // ✅ FIXED
+	    item.setQuantityKg(match.getConfirmedQuantity());
+	    item.setPricePerKg(fish.getPricePerKg());
+
+	    order.setItems(List.of(item));
+	    orderRepository.save(order);
+	}
+
+	@Override
+	public void rejectMatch(Long id, String supplierEmail) {
+		SupplyMatch match = requireOwnMatch(id, supplierEmail);
+
+		// Without this, rejecting an already-accepted match would reopen the demand
+		// while the order created on accept still stands.
+		if (match.getStatus() != MatchStatus.PENDING) {
+			throw new BusinessRuleException("Match already processed");
+		}
+
+	    match.setStatus(MatchStatus.REJECTED);
+	    supplyMatchRepository.save(match);
+
+	    DemandRequest demand = match.getDemandRequest();
+	    demand.setStatus(DemandStatus.OPEN);
+	    demandRepository.save(demand);
+		
 	}
 }

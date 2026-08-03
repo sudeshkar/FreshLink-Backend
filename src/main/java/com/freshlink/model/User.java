@@ -1,5 +1,7 @@
 package com.freshlink.model;
 
+import java.time.LocalDateTime;
+
 import com.freshlink.enums.Role;
 
 import jakarta.persistence.Access;
@@ -51,8 +53,15 @@ public abstract class User {
     protected Role role;
 
     protected String passwordHash;
-    
+
     protected Boolean emailVerified;
+
+    /**
+     * Set when an admin removes the account. Non-null means soft-deleted: the row
+     * stays so orders, ratings and analytics keep their references, but the account
+     * is excluded from every listing and cannot log in.
+     */
+    protected LocalDateTime deletedAt;
 
 	 
  

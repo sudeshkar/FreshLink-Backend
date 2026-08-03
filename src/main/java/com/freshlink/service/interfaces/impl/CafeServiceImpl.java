@@ -1,5 +1,6 @@
 package com.freshlink.service.interfaces.impl;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -10,6 +11,8 @@ import com.freshlink.Repository.CafeRepository;
 import com.freshlink.Repository.FishRepository;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.enums.OrderStatus;
+import com.freshlink.exception.BusinessRuleException;
+import com.freshlink.exception.ResourceNotFoundException;
 import com.freshlink.fishdto.FishMarketResponse;
 import com.freshlink.mapper.FishMapper;
 import com.freshlink.mapper.OrderMapper;
@@ -17,12 +20,13 @@ import com.freshlink.model.Cafe;
 import com.freshlink.model.Fish;
 import com.freshlink.model.Order;
 import com.freshlink.model.OrderItem;
+import com.freshlink.model.Supplier;
 import com.freshlink.orderdto.OrderCreateRequest;
+import com.freshlink.orderdto.OrderItemDto;
 import com.freshlink.orderdto.OrderResponse;
 import com.freshlink.service.interfaces.CafeService;
 import com.freshlink.userprofiledto.CafeProfileResponse;
 
-import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
@@ -44,68 +48,86 @@ public class CafeServiceImpl implements CafeService{
 
 	@Override
 	public List<FishMarketResponse> browseFish(String fishType, String city) {
-		List<Fish> fishList;
-        if (fishType != null) {
-            fishList = fishRepository.findByFishType_Name(fishType);
-        } else {
-            fishList = fishRepository.findAll();
-        }
-        return fishList.stream()
-                .map(fishMapper::toFishMarket)
-                .collect(Collectors.toList());
+		return fishRepository.searchMarket(blankToNull(fishType), blankToNull(city))
+				.stream()
+				.map(fishMapper::toFishMarket)
+				.collect(Collectors.toList());
+	}
+
+	/** An omitted filter and an empty one mean the same thing to the caller. */
+	private String blankToNull(String value) {
+		return (value == null || value.isBlank()) ? null : value;
 	}
 
 	@Override
 	public OrderResponse placeOrder(OrderCreateRequest dto, String email) {
+		
 		Cafe cafe = cafeRepository.findByEmail(email)
-	            .orElseThrow(() -> new RuntimeException("Cafe not found"));
-		
-		if (dto.items() == null || dto.items().isEmpty()) {
-		    throw new RuntimeException("Order must contain at least one item");
-		}
+	            .orElseThrow(() -> new ResourceNotFoundException("Cafe", email));
 
-		
-		 Order order = new Order();
-		    order.setCafe(cafe);
-		     
-		    
-		    List<OrderItem> items = dto.items().stream().map(itemDto -> {
+	    if (dto.items() == null || dto.items().isEmpty()) {
+	        throw new BusinessRuleException("Order must contain at least one item");
+	    }
 
-		        Fish fish = fishRepository.findById(itemDto.fishId())
-		                .orElseThrow(() -> new RuntimeException("Fish not found"));
+	    Order order = new Order();
+	    order.setCafe(cafe);
 
-		        if (fish.getAvailableKg() < itemDto.quantityKg()) {
-		            throw new RuntimeException(
-		                "Not enough stock for fish: " + fish.getName()
-		            );
-		        }
+	    Supplier orderSupplier = null;
+	    List<OrderItem> items = new ArrayList<>();
 
-		        
-		        fish.setAvailableKg(
-		            fish.getAvailableKg() - itemDto.quantityKg()
-		        );
-		        fish.setReservedKg(fish.getReservedKg()+itemDto.quantityKg());
+	    for (OrderItemDto itemDto : dto.items()) {
 
-		        OrderItem item = new OrderItem();
-		        item.setOrder(order);
-		        item.setFish(fish);
-		        item.setQuantityKg(itemDto.quantityKg());
-		        item.setPricePerKg(fish.getPricePerKg());
+	        Fish fish = fishRepository.findById(itemDto.fishId())
+	                .orElseThrow(() -> new ResourceNotFoundException("Fish", itemDto.fishId()));
 
-		        return item;
+	        Supplier fishSupplier = fish.getSupplier();
 
-		    }).toList();
+	        // A removed or suspended supplier is off the market, so it must not be
+	        // possible to order from one by passing a fish id directly.
+	        if (fishSupplier.getDeletedAt() != null || !fishSupplier.isActive()) {
+	            throw new BusinessRuleException(
+	                    "This supplier is no longer accepting orders: " + fishSupplier.getName());
+	        }
 
-		    order.setItems(items);
+	        if (orderSupplier == null) {
+	            orderSupplier = fishSupplier;
+	            order.setSupplier(orderSupplier);
+	        } else if (!orderSupplier.getId().equals(fishSupplier.getId())) {
+	            throw new BusinessRuleException("Order cannot contain fish from multiple suppliers");
+	        }
 
-		    Order savedOrder = orderRepository.save(order);
+	        if (itemDto.quantityKg() <= 0) {
+	            throw new BusinessRuleException("Quantity must be greater than zero");
+	        }
 
-		    try {
-		        return orderMapper.toOrderResponse(savedOrder);
-		    } catch (OptimisticLockException e) {
-		        throw new RuntimeException("Fish stock was updated by another order. Please retry.");
-		    }
+	        if (fish.getAvailableKg() < itemDto.quantityKg()) {
+	            throw new BusinessRuleException(
+	                    "Not enough stock for fish: " + fish.getName()
+	            );
+	        }
 
+	        // Reserve stock
+	        fish.setAvailableKg(fish.getAvailableKg() - itemDto.quantityKg());
+	        fish.setReservedKg(fish.getReservedKg() + itemDto.quantityKg());
+
+	        OrderItem item = new OrderItem();
+	        item.setOrder(order);
+	        item.setFish(fish);
+	        item.setQuantityKg(itemDto.quantityKg());
+	        item.setPricePerKg(fish.getPricePerKg());
+
+	        items.add(item);
+	    }
+
+	    order.setItems(items);
+
+	    // No try/catch around save(): the @Version conflict on Fish is only detected
+	    // at flush/commit, which happens after this method returns. Spring surfaces it
+	    // as OptimisticLockingFailureException, which GlobalExceptionHandler turns
+	    // into a 409 telling the cafe to retry.
+	    Order savedOrder = orderRepository.save(order);
+
+	    return orderMapper.toOrderResponse(savedOrder);
 		
 	}
 
@@ -122,14 +144,17 @@ public class CafeServiceImpl implements CafeService{
 
 	@Override
 	public void cancelOrder(Long orderId,String cafeEmail) {
-		 Cafe cafe = cafeRepository.findByEmail(cafeEmail)
-		            .orElseThrow(() -> new RuntimeException("Cafe not found"));
+			Cafe cafe = cafeRepository.findByEmail(cafeEmail)
+		            .orElseThrow(() -> new ResourceNotFoundException("Cafe", cafeEmail));
 
 		    Order order = orderRepository.findById(orderId)
-		            .orElseThrow(() -> new RuntimeException("Order not found"));
-		    
+		            .filter(o -> o.getCafe().getId().equals(cafe.getId()))
+		            // 404 rather than 403 on an ownership mismatch: a 403 would confirm
+		            // that another cafe's order id exists.
+		            .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+
 		    if (order.getStatus() != OrderStatus.REQUESTED) {
-		        throw new RuntimeException("Order cannot be cancelled");
+		        throw new BusinessRuleException("Only orders still awaiting supplier response can be cancelled");
 		    }
 		    
 		    for (OrderItem item : order.getItems()) {

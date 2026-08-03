@@ -13,4 +13,10 @@ public interface AdminService {
     void activateUser(Long userId);
     
     void deactivateUser(Long userId);
+
+    /**
+     * Soft-deletes an account. {@code actingAdminEmail} is the admin performing the
+     * action, so the service can refuse self-deletion.
+     */
+    void deleteUser(Long userId, String actingAdminEmail);
 }

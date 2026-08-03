@@ -3,6 +3,8 @@ package com.freshlink.controller;
 import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -36,5 +38,10 @@ public class AdminController {
     @PutMapping("/users/{id}/activate")
     public void activateUser(@PathVariable Long id) {
         adminService.activateUser(id);
+    }
+    
+    @DeleteMapping("/users/{id}/delete")
+    public void deleteUser(@PathVariable Long id, Authentication auth) {
+    	adminService.deleteUser(id, auth.getName());
     }
 }

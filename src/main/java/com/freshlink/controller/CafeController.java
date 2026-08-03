@@ -62,7 +62,7 @@ public class CafeController {
 	    }
 	    
 	    @PostMapping("/orders/{orderId}/rate")
-	    public void rateSupplier(@PathVariable Long orderId,@RequestBody RatingRequest ratingRequest) {
-	    	ratingService.rateSupplier(orderId,ratingRequest);
+	    public void rateSupplier(@PathVariable Long orderId,@RequestBody RatingRequest ratingRequest,Authentication auth) {
+	    	ratingService.rateSupplier(orderId,ratingRequest,auth.getName());
 	    }
 }
