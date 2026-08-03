@@ -5,6 +5,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.freshlink.exception.ValidationException;
+import com.freshlink.exception.BusinessRuleException;
+import com.freshlink.exception.AccountNotActiveException;
 import com.freshlink.Repository.UserRepository;
 import com.freshlink.authdto.AuthResponseDto;
 import com.freshlink.authdto.CafeRegisterRequest;
@@ -46,7 +49,7 @@ public class AuthServiceImpl implements AuthService{
 		User user = principal.getUser();
 		
 		if (!user.isActive()) {
-	        throw new RuntimeException("Account is not active. Please wait for admin approval.");
+	        throw new AccountNotActiveException("Account is not active. Please wait for admin approval.");
 	    }
 		
 		String accessToken = jwtUtil.generateToken(
@@ -80,10 +83,10 @@ public class AuthServiceImpl implements AuthService{
 	public void registerCafe(CafeRegisterRequest dto) {
 		 
 		if (userRepository.existsByEmail(dto.email())) {
-	        throw new RuntimeException("Email already exists");
+	        throw new BusinessRuleException("An account already exists for this email");
 	    }
 		if (!dto.password().matches("^(?=.*[A-Z])(?=.*[0-9])(?=.*[@#$%^&+=]).{8,}$")) {
-	        throw new RuntimeException("Weak password");
+	        throw new ValidationException("Password must be at least 8 characters and include upper case, lower case, a digit and a symbol");
 	    }
 		
 		Cafe cafe = new Cafe();
@@ -106,10 +109,10 @@ public class AuthServiceImpl implements AuthService{
 		 
 		
 		 if (userRepository.existsByEmail(dto.email())) {
-		        throw new RuntimeException("Email already exists");
+		        throw new BusinessRuleException("An account already exists for this email");
 		    }
 		 if (!dto.password().matches("^(?=.*[A-Z])(?=.*[0-9])(?=.*[@#$%^&+=]).{8,}$")) {
-		        throw new RuntimeException("Weak password");
+		        throw new ValidationException("Password must be at least 8 characters and include upper case, lower case, a digit and a symbol");
 		    }
 		
 		 Supplier supplier = new Supplier();

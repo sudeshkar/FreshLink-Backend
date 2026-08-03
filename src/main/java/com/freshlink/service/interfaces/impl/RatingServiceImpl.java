@@ -6,6 +6,8 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.freshlink.exception.ResourceNotFoundException;
+import com.freshlink.exception.BusinessRuleException;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.Repository.RatingRepository;
 import com.freshlink.enums.OrderStatus;
@@ -27,17 +29,19 @@ public class RatingServiceImpl implements RatingService{
 	@Override
 	public void rateSupplier(Long orderId,RatingRequest ratingRequest,String cafeEmail) {
 		Order order = orderRepository.findById(orderId)
-	            .orElseThrow(() -> new RuntimeException("Order not found"));
+	            .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
 		if (!order.getCafe().getEmail().equals(cafeEmail)) {
-	        throw new RuntimeException("Unauthorized");
+	        // 404 rather than 403, matching every other ownership check: a 403 would
+	        // confirm the order exists and let one cafe enumerate another's.
+	        throw new ResourceNotFoundException("Order", orderId);
 	    }
 		
 		if (order.getStatus() != OrderStatus.COMPLETED) {
-	        throw new RuntimeException("Order not completed");
+	        throw new BusinessRuleException("Only a completed order can be rated");
 	    }
 		
 		 if (ratingRepository.existsByOrder(order)) {
-		        throw new RuntimeException("Already rated");
+		        throw new BusinessRuleException("This order has already been rated");
 		    }
 		 
 		 Rating rating = new Rating();

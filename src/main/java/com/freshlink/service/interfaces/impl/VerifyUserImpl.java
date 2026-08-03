@@ -2,6 +2,7 @@ package com.freshlink.service.interfaces.impl;
 
 import org.springframework.stereotype.Service;
 
+import com.freshlink.exception.ResourceNotFoundException;
 import com.freshlink.Repository.UserRepository;
 import com.freshlink.service.interfaces.VerifyUserService;
 
@@ -16,7 +17,7 @@ public class VerifyUserImpl implements VerifyUserService{
 	@Override
 	public void verifyUser(String email) {
 		
-		 userRepository.findByEmail(email).orElseThrow(()-> new RuntimeException("User Not found"));
+		 userRepository.findByEmail(email).orElseThrow(() -> new ResourceNotFoundException("User", email));
 	 
 	}
 

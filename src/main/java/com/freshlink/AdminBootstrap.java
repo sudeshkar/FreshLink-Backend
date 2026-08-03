@@ -205,11 +205,13 @@ public class AdminBootstrap {
 		FishType prawns = fishTypeRepository.findByNameIgnoreCase("Prawns").orElseThrow();
 		FishType salmon = fishTypeRepository.findByNameIgnoreCase("Salmon").orElseThrow();
 
-		// Trailing nulls are createdAt/updatedAt - Hibernate fills them in.
+		// Built with setters rather than the all-args constructor: that constructor
+		// is positional, so reordering a field on Fish would silently swap values
+		// here instead of failing to compile.
 		List<Fish> seeded = fishRepository.saveAll(List.of(
-			new Fish(null, null, tuna, "Fresh Tuna", BigDecimal.valueOf(1800), 100, 0, supplier1, null, null),
-			new Fish(null, null, prawns, "King Prawns", BigDecimal.valueOf(2200), 80, 0, supplier1, null, null),
-			new Fish(null, null, salmon, "Atlantic Salmon", BigDecimal.valueOf(2500), 60, 0, supplier2, null, null)
+			listing(supplier1, tuna, "Fresh Tuna", 1800, 100),
+			listing(supplier1, prawns, "King Prawns", 2200, 80),
+			listing(supplier2, salmon, "Atlantic Salmon", 2500, 60)
 		));
 
 		// Opening prices. The V6 backfill cannot cover these: migrations run before
@@ -220,6 +222,18 @@ public class AdminBootstrap {
 			opening.setPricePerKg(fish.getPricePerKg());
 			fishPriceHistoryRepository.save(opening);
 		});
+	}
+
+
+	private Fish listing(Supplier supplier, FishType type, String name, int pricePerKg, double availableKg) {
+		Fish fish = new Fish();
+		fish.setSupplier(supplier);
+		fish.setFishType(type);
+		fish.setName(name);
+		fish.setPricePerKg(BigDecimal.valueOf(pricePerKg));
+		fish.setAvailableKg(availableKg);
+		fish.setReservedKg(0);
+		return fish;
 	}
 
 	// ---------------- DAILY SUPPLY ----------------

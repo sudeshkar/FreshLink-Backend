@@ -7,6 +7,9 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.freshlink.exception.ValidationException;
+import com.freshlink.exception.ResourceNotFoundException;
+import com.freshlink.exception.BusinessRuleException;
 import com.freshlink.Repository.OtpRepository;
 import com.freshlink.Repository.UserRepository;
 import com.freshlink.exception.RateLimitExceededException;
@@ -68,29 +71,29 @@ public class OtpServiceImpl implements OtpService {
 	@Transactional
 	public void verifyOtp(String email, String otp) {
 		User user = userRepository.findByEmail(email)
-				.orElseThrow(() -> new RuntimeException("User not found"));
+				.orElseThrow(() -> new ResourceNotFoundException("User", email));
 
 		// Look the record up by email only. Fetching by email *and* OTP would mean a
 		// wrong guess matched no row at all, leaving the attempt counter unreachable.
 		OtpVerification data = otpRepository.findTopByEmailOrderByExpiresAtDesc(email)
-				.orElseThrow(() -> new RuntimeException("No OTP has been requested for this email"));
+				.orElseThrow(() -> new ResourceNotFoundException("No verification code has been requested for", email));
 
 		if (data.isVerified()) {
-			throw new RuntimeException("This OTP has already been used");
+			throw new BusinessRuleException("This verification code has already been used");
 		}
 
 		if (data.getAttempts() >= MAX_ATTEMPTS) {
-			throw new RuntimeException("Too many incorrect attempts. Please request a new OTP.");
+			throw new RateLimitExceededException("Too many incorrect attempts. Please request a new code.");
 		}
 
 		if (data.getExpiresAt().isBefore(LocalDateTime.now())) {
-			throw new RuntimeException("OTP expired");
+			throw new BusinessRuleException("This verification code has expired. Please request a new one.");
 		}
 
 		if (!data.getOtp().equals(otp)) {
 			data.setAttempts(data.getAttempts() + 1);
 			otpRepository.save(data);
-			throw new RuntimeException("Invalid OTP");
+			throw new ValidationException("Incorrect verification code");
 		}
 
 		user.setEmailVerified(true);

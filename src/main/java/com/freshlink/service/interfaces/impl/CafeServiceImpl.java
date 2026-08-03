@@ -54,7 +54,7 @@ public class CafeServiceImpl implements CafeService{
 	@Override
 	public CafeProfileResponse getProfile(String name) {
 		Cafe cafe = cafeRepository.findByEmail(name)
-                .orElseThrow(() -> new RuntimeException("Cafe not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe", name));
         return new CafeProfileResponse(cafe.getName(), cafe.getEmail(), cafe.getPhone(), cafe.isActive());
 	}
 

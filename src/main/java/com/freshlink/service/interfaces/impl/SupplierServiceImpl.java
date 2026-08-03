@@ -93,12 +93,12 @@ public class SupplierServiceImpl implements SupplierService{
 	
 	public FishResponse addFish(FishCreateRequest dto, String supplierEmail) {
 		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
-                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 		FishType fishType = fishTypeRepository.findByNameIgnoreCase(dto.fishTypeName())
-	            .orElseThrow(() -> new RuntimeException("Fish type not found"));
+	            .orElseThrow(() -> new ResourceNotFoundException("Fish type", dto.fishTypeName()));
 		
 		if (fishRepository.existsBySupplierAndFishType(supplier, fishType)) {
-		    throw new RuntimeException("Fish already exists for supplier");
+		    throw new BusinessRuleException("You already have a listing for this fish type. Update it instead.");
 		}
 
 		
@@ -116,7 +116,7 @@ public class SupplierServiceImpl implements SupplierService{
 	@Override
 	public List<FishResponse> getMyFish(String supplierEmail) {
 		 Supplier supplier = supplierRepository.findByEmail(supplierEmail)
-	                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+	                .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 	        return fishRepository.findBySupplier(supplier)
 	                .stream()
 	                .map(fishMapper::toFishResponse) 
@@ -125,7 +125,7 @@ public class SupplierServiceImpl implements SupplierService{
 	@Override
 	public FishResponse updateFish(Long id, FishUpdateRequest dto, String supplierEmail) {
 		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
-                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 		
 		Fish fish = fishRepository.findById(id)
 				.filter(f -> f.getSupplier().getId().equals(supplier.getId()))
@@ -143,7 +143,7 @@ public class SupplierServiceImpl implements SupplierService{
         if (dto.fishTypeName() != null && !dto.fishTypeName().isBlank()) {
             FishType fishType = fishTypeRepository
                     .findByNameIgnoreCase(dto.fishTypeName())
-                    .orElseThrow(() -> new RuntimeException("Fish type not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Fish type", dto.fishTypeName()));
 
             fish.setFishType(fishType);
         }
@@ -158,7 +158,7 @@ public class SupplierServiceImpl implements SupplierService{
 	@Override
 	public void deleteFish(Long id, String supplierEmail) {
 		 Supplier supplier = supplierRepository.findByEmail(supplierEmail)
-	                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+	                .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 
 	        Fish fish = fishRepository.findById(id)
 	                .filter(f -> f.getSupplier().getId().equals(supplier.getId()))
@@ -169,9 +169,9 @@ public class SupplierServiceImpl implements SupplierService{
 	}
 	
 	@Override
-	public SupplierProfileResponse getProfile(String name) {
-		 Supplier supplier = supplierRepository.findByEmail(name)
-				 .orElseThrow(() -> new RuntimeException("Supplier not found"));
+	public SupplierProfileResponse getProfile(String supplierEmail) {
+		 Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				 .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 		 
 		 return supplierMapper.toProfile(supplier);
 	}
@@ -181,7 +181,7 @@ public class SupplierServiceImpl implements SupplierService{
 		Order order = validateSupplierOrder(orderId, supplierEmail);
 		
 		if (order.getStatus() != OrderStatus.REQUESTED) {
-	        throw new RuntimeException("Order cannot be accepted");
+	        throw new BusinessRuleException("Only an order awaiting your response can be accepted");
 	    }
 		
 		for (OrderItem item : order.getItems()) {
@@ -214,7 +214,7 @@ public class SupplierServiceImpl implements SupplierService{
 		 Order order = validateSupplierOrder(orderId, supplierEmail);
 		 
 		 if (order.getStatus() != OrderStatus.REQUESTED) {
-		        throw new RuntimeException("Order cannot be rejected");
+		        throw new BusinessRuleException("Only an order awaiting your response can be rejected");
 		    }
 		 
 		 for (OrderItem item : order.getItems()) {
@@ -237,7 +237,7 @@ public class SupplierServiceImpl implements SupplierService{
 	public void markDelivering(Long orderId, String supplierEmail) {
 		Order order = validateSupplierOrder(orderId, supplierEmail);
 		if (order.getStatus() != OrderStatus.ACCEPTED) {
-	        throw new RuntimeException("Invalid state");
+	        throw new BusinessRuleException("Only an accepted order can be marked as out for delivery");
 	    }
 		
 		order.setStatus(OrderStatus.DELIVERING);
@@ -275,7 +275,7 @@ public class SupplierServiceImpl implements SupplierService{
 	
 	private Order validateSupplierOrder(Long orderId, String supplierEmail) {
 		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
-	            .orElseThrow(() -> new RuntimeException("Supplier not found"));
+	            .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 
 	    return orderRepository.findById(orderId)
 	            .filter(order -> order.getSupplier().getId().equals(supplier.getId()))
@@ -285,7 +285,7 @@ public class SupplierServiceImpl implements SupplierService{
 	public List<SupplyMatchResponse> getPendingMatches(String supplierEmail) {
 		
 		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
-	            .orElseThrow(() -> new RuntimeException("Supplier not found"));
+	            .orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
 		
 		 List<SupplyMatch> supplyMatches = supplyMatchRepository.findByDailySupply_SupplierAndStatus(supplier,MatchStatus.PENDING);
 		 List<SupplyMatchResponse> responses = new ArrayList<SupplyMatchResponse>();

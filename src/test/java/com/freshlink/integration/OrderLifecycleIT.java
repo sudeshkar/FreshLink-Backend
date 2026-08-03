@@ -101,13 +101,14 @@ class OrderLifecycleIT {
 								{"score":5,"comment":"Fresh and on time"}"""))
 				.andExpect(status().isOk());
 
-		// A second rating on the same order must be refused.
+		// A second rating on the same order must be refused. 409, not 400: the
+		// request is perfectly well formed, it just conflicts with existing state.
 		mockMvc.perform(post("/api/v1/cafes/orders/" + orderId + "/rate")
 						.header("Authorization", "Bearer " + cafeToken)
 						.contentType("application/json")
 						.content("""
 								{"score":1,"comment":"Changed my mind"}"""))
-				.andExpect(status().isBadRequest());
+				.andExpect(status().isConflict());
 	}
 
 	@Test

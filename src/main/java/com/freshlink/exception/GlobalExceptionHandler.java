@@ -11,10 +11,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -68,18 +70,35 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.badRequest().body(body);
 	}
 
-	/**
-	 * Transitional bridge: the services currently signal domain failures with a
-	 * plain RuntimeException, so treating those as 500s would be misleading.
-	 * As services migrate to ResourceNotFoundException / BusinessRuleException,
-	 * this handler should shrink and eventually be removed.
-	 */
-	@ExceptionHandler(RuntimeException.class)
-	public ResponseEntity<ApiError> handleRuntime(RuntimeException ex, WebRequest request) {
-		log.warn("Unmapped runtime exception at {}", path(request), ex);
+	@ExceptionHandler(ValidationException.class)
+	public ResponseEntity<ApiError> handleValidationRule(ValidationException ex, WebRequest request) {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
 	}
 
+	@ExceptionHandler(AccountNotActiveException.class)
+	public ResponseEntity<ApiError> handleAccountNotActive(AccountNotActiveException ex, WebRequest request) {
+		return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+	}
+
+	/** Malformed JSON, or a body that cannot be bound to the request record. */
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException ex, WebRequest request) {
+		return build(HttpStatus.BAD_REQUEST, "Request body is missing or malformed", request);
+	}
+
+	/** A path variable or query parameter of the wrong type, such as /orders/abc. */
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex, WebRequest request) {
+		return build(HttpStatus.BAD_REQUEST,
+				"'%s' is not a valid value for %s".formatted(ex.getValue(), ex.getName()), request);
+	}
+
+	/**
+	 * Anything reaching here is unexpected, not a domain outcome: every business
+	 * failure has a typed exception above. There used to be a RuntimeException
+	 * handler returning 400, which meant a genuine null pointer was reported to
+	 * the client as though they had sent a bad request.
+	 */
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiError> handleUnexpected(Exception ex, WebRequest request) {
 		log.error("Unhandled exception at {}", path(request), ex);

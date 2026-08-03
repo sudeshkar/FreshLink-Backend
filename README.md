@@ -688,13 +688,13 @@ Every failure returns a consistent body:
 
 | Status | Meaning |
 | :--- | :--- |
-| `400` | Validation failure (with `fieldErrors`) |
+| `400` | Validation failure (with `fieldErrors`), malformed body, or a path variable of the wrong type |
 | `401` | Missing or invalid access token, or a refresh token that is unknown, expired, already used, or belongs to a suspended account |
-| `403` | Authenticated but wrong role |
+| `403` | Authenticated but wrong role, or an account awaiting verification/approval |
 | `404` | Not found — **also returned when a resource exists but belongs to someone else**, so IDs cannot be enumerated |
 | `409` | Domain rule violation, or a concurrent stock update — safe to retry |
 | `429` | Rate limit exceeded on an auth endpoint |
-| `500` | Unexpected. Details are logged, never returned. |
+| `500` | Genuinely unexpected. Every domain failure above has a typed exception, so a 500 means a defect, not bad input. Details are logged, never returned. |
 
 ---
 

@@ -85,6 +85,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>{
 		    )
 		    FROM Order o
 		    JOIN o.cafe c
+		    WHERE c.deletedAt IS NULL
 		    GROUP BY c.id, c.name
 		""")
 		List<CafeAnalyticsDTO> getCafeAnalytics();

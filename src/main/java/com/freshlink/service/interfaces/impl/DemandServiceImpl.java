@@ -40,7 +40,7 @@ public class DemandServiceImpl implements DemandService{
 		demand.setCafe(cafe);
 		demand.setFishType(
 				fishTypeRepository.findById(dto.fishTypeId())
-		        .orElseThrow(() -> new RuntimeException("Fish type not found"))
+		        .orElseThrow(() -> new ResourceNotFoundException("Fish type", dto.fishTypeId()))
 		);
 		demand.setRequestedQuantity(dto.requestedQuantity());
 		demand.setRequiredDate(dto.requiredDate());

@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.freshlink.exception.ResourceNotFoundException;
 import com.freshlink.Repository.UserRepository;
 import com.freshlink.mapper.UserDtoMapper;
 import com.freshlink.model.User;
@@ -29,7 +30,7 @@ public class UserServiceImpl implements UserService{
 
 	@Override
 	public User getByEmail(String email) {
-		return userRepo.findByEmail(email).orElseThrow(()->new RuntimeException("User not found with email"));
+		return userRepo.findByEmail(email).orElseThrow(() -> new ResourceNotFoundException("User", email));
               
 	}
 
@@ -47,14 +48,14 @@ public class UserServiceImpl implements UserService{
 	@Override
 	public User getUserByEmail(String email) {
 		
-		return userRepo.findByEmail(email).orElseThrow(()->new RuntimeException("User not found with email"));
+		return userRepo.findByEmail(email).orElseThrow(() -> new ResourceNotFoundException("User", email));
                  
 	}
 
 	@Override
 	public User getUserById(Long id) {
 		return userRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User", id));
 	}
 
 	@Override
@@ -71,7 +72,7 @@ public class UserServiceImpl implements UserService{
 	@Transactional
 	public void deleteUser(Long id) {
 		if (!userRepo.existsById(id)) {
-            throw new RuntimeException("User not found");
+            throw new ResourceNotFoundException("User", id);
         }
         userRepo.deleteById(id);
 		
@@ -80,7 +81,7 @@ public class UserServiceImpl implements UserService{
 	@Override
 	public UserDto getMyProfile(Authentication authentication) {
 		String email = authentication.getName();
-		User user = userRepo.findByEmail(email).orElseThrow(()->new RuntimeException("User not found Auth Failed"));
+		User user = userRepo.findByEmail(email).orElseThrow(() -> new ResourceNotFoundException("User", email));
 		 
 		return userDtoMapper.toDto(user);
 		
