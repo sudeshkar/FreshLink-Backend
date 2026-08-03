@@ -39,7 +39,7 @@ It runs two complementary trade flows:
 - **Price history** — every price a listing has charged, recorded on creation and on each change, so cafés can judge an offer and seasonal movement is visible.
 - **Delivery tracking** — driver, phone, ETA and arrival time per order, with validated status transitions. Cafés can see where their fish is.
 - **Tracked order lifecycle** — orders move through accept, reject, delivering, and completion transitions, each a distinct authorised endpoint.
-- **Concurrency-safe stock** — reservations are guarded by an optimistic-locking version column, so two simultaneous orders cannot claim the same fish.
+- **Concurrency-safe stock** — reservations are guarded by an optimistic-locking version column, proven by concurrent integration tests: without it, two 60kg orders against 100kg of stock both succeed.
 - **Demand matching engine** — greedy allocation ranked by freshness, then supplier rating, then catch time; re-runs every 10 minutes for unfilled demand.
 - **Post-delivery ratings** — cafés rate suppliers once an order completes, feeding both the leaderboard and the matching engine's ranking.
 - **Admin oversight** — account activation, soft deletion with safeguards, and an analytics dashboard.
