@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.deliverydto.DeliveryUpdateRequest;
 import com.freshlink.fishdto.FishCreateRequest;
+import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
@@ -39,6 +40,9 @@ public interface SupplierService {
 		void completeOrder(Long orderId, String supplierEmail);
 
 		List<SupplyMatchResponse> getPendingMatches(String supplierEmail);
+
+	/** What this listing has charged over time, newest first. */
+	Page<PriceHistoryResponse> getFishPriceHistory(Long fishId, String supplierEmail, Pageable pageable);
 
 	// ---- Delivery ----
 

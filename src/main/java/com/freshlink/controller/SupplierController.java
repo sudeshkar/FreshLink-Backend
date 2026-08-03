@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.deliverydto.DeliveryUpdateRequest;
 import com.freshlink.fishdto.FishCreateRequest;
+import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.orderdto.OrderResponse;
@@ -98,6 +99,15 @@ public class SupplierController {
     	supplierService.completeOrder(orderId,auth.getName());
     }
     
+    @Operation(summary = "Price history for one of your listings")
+    @GetMapping("/fish/{id}/price-history")
+    public Page<PriceHistoryResponse> fishPriceHistory(
+            @PathVariable Long id,
+            Authentication auth,
+            @PageableDefault(size = 30) Pageable pageable) {
+        return supplierService.getFishPriceHistory(id, auth.getName(), pageable);
+    }
+
     @Operation(summary = "Track a delivery",
             description = "The delivery record is created when the order is marked as delivering.")
     @GetMapping("/orders/{orderId}/delivery")

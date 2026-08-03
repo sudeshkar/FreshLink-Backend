@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.freshlink.Repository.CafeRepository;
 import com.freshlink.Repository.DailySupplyRepository;
+import com.freshlink.Repository.FishPriceHistoryRepository;
 import com.freshlink.Repository.FishRepository;
 import com.freshlink.Repository.FishTypeRepository;
 import com.freshlink.Repository.SupplierRepository;
@@ -25,6 +26,7 @@ import com.freshlink.model.Admin;
 import com.freshlink.model.Cafe;
 import com.freshlink.model.DailySupply;
 import com.freshlink.model.Fish;
+import com.freshlink.model.FishPriceHistory;
 import com.freshlink.model.FishType;
 import com.freshlink.model.Supplier;
 
@@ -52,6 +54,7 @@ public class AdminBootstrap {
 	private final CafeRepository cafeRepository;
 	private final FishRepository fishRepository;
 	private final DailySupplyRepository dailySupplyRepository;
+	private final FishPriceHistoryRepository fishPriceHistoryRepository;
 
 	@Value("${app.admin.email:}")
 	private String adminEmail;
@@ -203,11 +206,20 @@ public class AdminBootstrap {
 		FishType salmon = fishTypeRepository.findByNameIgnoreCase("Salmon").orElseThrow();
 
 		// Trailing nulls are createdAt/updatedAt - Hibernate fills them in.
-		fishRepository.saveAll(List.of(
+		List<Fish> seeded = fishRepository.saveAll(List.of(
 			new Fish(null, null, tuna, "Fresh Tuna", BigDecimal.valueOf(1800), 100, 0, supplier1, null, null),
 			new Fish(null, null, prawns, "King Prawns", BigDecimal.valueOf(2200), 80, 0, supplier1, null, null),
 			new Fish(null, null, salmon, "Atlantic Salmon", BigDecimal.valueOf(2500), 60, 0, supplier2, null, null)
 		));
+
+		// Opening prices. The V6 backfill cannot cover these: migrations run before
+		// this seeder, so on a fresh database there are no listings for it to find.
+		seeded.forEach(fish -> {
+			FishPriceHistory opening = new FishPriceHistory();
+			opening.setFish(fish);
+			opening.setPricePerKg(fish.getPricePerKg());
+			fishPriceHistoryRepository.save(opening);
+		});
 	}
 
 	// ---------------- DAILY SUPPLY ----------------

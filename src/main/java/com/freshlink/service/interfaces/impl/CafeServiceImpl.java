@@ -11,12 +11,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.freshlink.Repository.CafeRepository;
 import com.freshlink.Repository.DeliveryRepository;
+import com.freshlink.Repository.FishPriceHistoryRepository;
 import com.freshlink.Repository.FishRepository;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.enums.OrderStatus;
 import com.freshlink.exception.BusinessRuleException;
 import com.freshlink.exception.ResourceNotFoundException;
 import com.freshlink.deliverydto.DeliveryResponse;
+import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.fishdto.FishMarketResponse;
 import com.freshlink.mapper.FishMapper;
 import com.freshlink.mapper.OrderMapper;
@@ -44,6 +46,7 @@ public class CafeServiceImpl implements CafeService{
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
     private final DeliveryRepository deliveryRepository;
+    private final FishPriceHistoryRepository fishPriceHistoryRepository;
 	
 	@Override
 	public CafeProfileResponse getProfile(String name) {
@@ -56,6 +59,19 @@ public class CafeServiceImpl implements CafeService{
 	public Page<FishMarketResponse> browseFish(String fishType, String city, Pageable pageable) {
 		return fishRepository.searchMarket(normaliseFilter(fishType), normaliseFilter(city), pageable)
 				.map(fishMapper::toFishMarket);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public Page<PriceHistoryResponse> getPriceHistory(Long fishId, Pageable pageable) {
+		// Market data, so no ownership scoping - but a listing whose supplier has
+		// been removed or suspended is off the market and its history goes with it.
+		Fish fish = fishRepository.findById(fishId)
+				.filter(f -> f.getSupplier().getDeletedAt() == null && f.getSupplier().isActive())
+				.orElseThrow(() -> new ResourceNotFoundException("Fish", fishId));
+
+		return fishPriceHistoryRepository.findByFishOrderByRecordedAtDesc(fish, pageable)
+				.map(h -> new PriceHistoryResponse(h.getPricePerKg(), h.getRecordedAt()));
 	}
 
 	@Override

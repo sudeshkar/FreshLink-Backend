@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.freshlink.deliverydto.DeliveryResponse;
+import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.fishdto.FishMarketResponse;
 import com.freshlink.orderdto.OrderCreateRequest;
 import com.freshlink.orderdto.OrderResponse;
@@ -69,6 +70,13 @@ public class CafeController {
 	    	cafeService.cancelOrder(orderId,auth.getName());
 	    }
 	    
+	    @GetMapping("/market/fish/{fishId}/price-history")
+	    public Page<PriceHistoryResponse> priceHistory(
+	            @PathVariable Long fishId,
+	            @PageableDefault(size = 30) Pageable pageable) {
+	        return cafeService.getPriceHistory(fishId, pageable);
+	    }
+
 	    @GetMapping("/orders/{orderId}/delivery")
 	    public DeliveryResponse trackDelivery(@PathVariable Long orderId, Authentication auth) {
 	        return cafeService.trackDelivery(orderId, auth.getName());

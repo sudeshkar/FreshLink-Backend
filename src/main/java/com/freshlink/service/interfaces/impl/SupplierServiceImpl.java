@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.freshlink.Repository.DailySupplyRepository;
 import com.freshlink.Repository.DeliveryRepository;
 import com.freshlink.Repository.DemandRepository;
+import com.freshlink.Repository.FishPriceHistoryRepository;
 import com.freshlink.Repository.FishRepository;
 import com.freshlink.Repository.FishTypeRepository;
 import com.freshlink.Repository.OrderRepository;
@@ -30,6 +31,7 @@ import com.freshlink.enums.SupplyStatus;
 import com.freshlink.exception.BusinessRuleException;
 import com.freshlink.exception.ResourceNotFoundException;
 import com.freshlink.fishdto.FishCreateRequest;
+import com.freshlink.fishdto.PriceHistoryResponse;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
 import com.freshlink.mapper.FishMapper;
@@ -39,6 +41,7 @@ import com.freshlink.mapper.SupplyMatchMapper;
 import com.freshlink.model.DailySupply;
 import com.freshlink.model.Delivery;
 import com.freshlink.model.DemandRequest;
+import com.freshlink.model.FishPriceHistory;
 import com.freshlink.model.Fish;
 import com.freshlink.model.FishType;
 import com.freshlink.model.Order;
@@ -73,6 +76,7 @@ public class SupplierServiceImpl implements SupplierService{
     private final DeliveryRepository deliveryRepository;
     private final DemandMatchingScheduler demandMatchingScheduler;
     private final DemandMatchService demandMatchService;
+    private final FishPriceHistoryRepository fishPriceHistoryRepository;
     
 	@Override
 	
@@ -95,6 +99,7 @@ public class SupplierServiceImpl implements SupplierService{
         fish.setSupplier(supplier);
 
         Fish saved = fishRepository.save(fish);
+        recordPrice(saved);
         return fishMapper.toFishResponse(saved);
 	}
 	@Override
@@ -118,6 +123,10 @@ public class SupplierServiceImpl implements SupplierService{
 		 if (dto.name() != null && !dto.name().isBlank()) {
 		        fish.setName(dto.name());
 		    }
+		 // Compared before assignment: only an actual change is worth a history
+		 // row, otherwise every unrelated edit adds noise to the price trend.
+		 boolean priceChanged = dto.pricePerKg() != null
+				 && dto.pricePerKg().compareTo(fish.getPricePerKg()) != 0;
 		 if (dto.pricePerKg() != null) fish.setPricePerKg(dto.pricePerKg());
         if (dto.availableKg() != null) fish.setAvailableKg(dto.availableKg());
         if (dto.fishTypeName() != null && !dto.fishTypeName().isBlank()) {
@@ -130,6 +139,9 @@ public class SupplierServiceImpl implements SupplierService{
 
         
         Fish updated = fishRepository.save(fish);
+        if (priceChanged) {
+            recordPrice(updated);
+        }
         return fishMapper.toFishResponse(updated);
 }
 	@Override
@@ -273,6 +285,28 @@ public class SupplierServiceImpl implements SupplierService{
 		 
 	}
 	
+	// ---------------- PRICE HISTORY ----------------
+
+	private void recordPrice(Fish fish) {
+		FishPriceHistory entry = new FishPriceHistory();
+		entry.setFish(fish);
+		entry.setPricePerKg(fish.getPricePerKg());
+		fishPriceHistoryRepository.save(entry);
+	}
+
+	@Override
+	public Page<PriceHistoryResponse> getFishPriceHistory(Long fishId, String supplierEmail, Pageable pageable) {
+		Supplier supplier = supplierRepository.findByEmail(supplierEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Supplier", supplierEmail));
+
+		Fish fish = fishRepository.findById(fishId)
+				.filter(f -> f.getSupplier().getId().equals(supplier.getId()))
+				.orElseThrow(() -> new ResourceNotFoundException("Fish", fishId));
+
+		return fishPriceHistoryRepository.findByFishOrderByRecordedAtDesc(fish, pageable)
+				.map(h -> new PriceHistoryResponse(h.getPricePerKg(), h.getRecordedAt()));
+	}
+
 	// ---------------- DELIVERY ----------------
 
 	/** Which moves are legal from each state; terminal states allow none. */
