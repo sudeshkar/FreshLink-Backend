@@ -96,14 +96,22 @@ class RedisBackedIT {
 	}
 
 	@Test
-	@DisplayName("account status is cached in Redis, so every instance sees one answer")
+	@DisplayName("an answer cached by one instance is honoured by another")
 	void accountStatusIsSharedThroughRedis() {
-		accountStatusService.isUsable("cafe1@freshlink.com");
+		// Nobody by this name exists, so the database would say "not usable".
+		// Writing to the shared cache stands in for another replica having
+		// already answered - if this instance honours it, the two are genuinely
+		// sharing state rather than each keeping a private copy.
+		String stranger = "nobody-" + System.nanoTime() + "@freshlink.test";
 
-		assertThat(cacheManager.getCache(AccountStatusService.CACHE)).isNotNull();
-		assertThat(cacheManager.getCache(AccountStatusService.CACHE)
-				.get("cafe1@freshlink.com"))
-				.as("the answer must be readable from the shared cache, not just this JVM")
-				.isNotNull();
+		assertThat(accountStatusService.isUsable(stranger))
+				.as("unknown account, straight from the database")
+				.isFalse();
+
+		cacheManager.getCache(AccountStatusService.CACHE).put(stranger, true);
+
+		assertThat(accountStatusService.isUsable(stranger))
+				.as("the shared answer must win, which is the whole point of sharing it")
+				.isTrue();
 	}
 }
