@@ -40,6 +40,7 @@ import com.freshlink.model.OrderItem;
 import com.freshlink.model.Supplier;
 import com.freshlink.model.SupplyMatch;
 import com.freshlink.orderdto.OrderResponse;
+import com.freshlink.service.interfaces.DemandMatchService;
 import com.freshlink.service.interfaces.DemandMatchingScheduler;
 import com.freshlink.service.interfaces.SupplierService;
 import com.freshlink.supplydto.DailySupplyCreateRequest;
@@ -65,6 +66,7 @@ public class SupplierServiceImpl implements SupplierService{
     private final DemandRepository demandRepository;
     private final DeliveryRepository deliveryRepository;
     private final DemandMatchingScheduler demandMatchingScheduler;
+    private final DemandMatchService demandMatchService;
     
 	@Override
 	
@@ -433,6 +435,8 @@ public class SupplierServiceImpl implements SupplierService{
 	    order.setCafe(match.getDemandRequest().getCafe());
 	    order.setSupplier(supplier);
 	    order.setStatus(OrderStatus.REQUESTED);
+	    // Keeps the trail from order back to the match and the demand behind it.
+	    order.setSupplyMatch(match);
 
 	    OrderItem item = new OrderItem();
 	    item.setOrder(order);
@@ -457,9 +461,9 @@ public class SupplierServiceImpl implements SupplierService{
 	    match.setStatus(MatchStatus.REJECTED);
 	    supplyMatchRepository.save(match);
 
-	    DemandRequest demand = match.getDemandRequest();
-	    demand.setStatus(DemandStatus.OPEN);
-	    demandRepository.save(demand);
-		
+	    // Recompute rather than forcing OPEN: other suppliers may still cover part
+	    // or all of this demand, and flatly reopening it misreported a demand that
+	    // was in fact still partially or fully matched.
+	    demandMatchService.applyStatus(match.getDemandRequest());
 	}
 }

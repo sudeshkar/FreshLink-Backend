@@ -59,6 +59,15 @@ public class Order {
     @JoinColumn(name = "supplier_id", nullable = false)
     private Supplier supplier;
 
+    /**
+     * Set when the order came from an accepted demand match rather than a direct
+     * marketplace purchase, so an order can be traced back to the demand that
+     * produced it. Null for spot-market orders.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supply_match_id")
+    private SupplyMatch supplyMatch;
+
 
     @PrePersist
     protected void onCreate() {

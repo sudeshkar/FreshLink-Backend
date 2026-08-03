@@ -14,70 +14,68 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
- 
 
 @Component
 public class JwtUtil {
-	
-	 @Value("${jwt.secret}")
-	    private String secret;
 
-	    @Value("${jwt.expiration}")
-	    private long expiration;
+	@Value("${jwt.secret}")
+	private String secret;
 
-	    private SecretKey secretKey;
+	@Value("${jwt.expiration}")
+	private long expiration;
 
-	    /** HS256 requires a key of at least 256 bits; jjwt rejects anything shorter. */
-	    private static final int MIN_SECRET_BYTES = 32;
+	private SecretKey secretKey;
 
-	    @PostConstruct
-	    public void init() {
-	        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
-	        if (keyBytes.length < MIN_SECRET_BYTES) {
-	            throw new IllegalStateException(
-	                    "jwt.secret must be at least %d bytes (%d given). Set the JWT_SECRET environment variable to a long random value."
-	                            .formatted(MIN_SECRET_BYTES, keyBytes.length));
-	        }
-	        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
-	    }
+	/** HS256 requires a key of at least 256 bits; jjwt rejects anything shorter. */
+	private static final int MIN_SECRET_BYTES = 32;
 
-	    public String generateToken(String email, Role role) { 
-	    	return Jwts.builder()
-	                .setSubject(email)
-	                .claim("role", role.name())
-	                .setIssuedAt(new Date())
-	                .setExpiration(new Date(System.currentTimeMillis() + expiration))
-	                .signWith(secretKey)
-	                .compact();
-	    }
+	@PostConstruct
+	public void init() {
+		byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+		if (keyBytes.length < MIN_SECRET_BYTES) {
+			throw new IllegalStateException(
+					"jwt.secret must be at least %d bytes (%d given). Set the JWT_SECRET environment variable to a long random value."
+							.formatted(MIN_SECRET_BYTES, keyBytes.length));
+		}
+		this.secretKey = Keys.hmacShaKeyFor(keyBytes);
+	}
 
-	    public String extractRole(String token) {
-	    	 return Jwts.parserBuilder()
-	    	            .setSigningKey(secretKey)
-	    	            .build()
-	    	            .parseClaimsJws(token)
-	    	            .getBody()
-	    	            .get("role", String.class); 
-	    }
+	public String generateToken(String email, Role role) {
+		return Jwts.builder()
+				.subject(email)
+				.claim("role", role.name())
+				.issuedAt(new Date())
+				.expiration(new Date(System.currentTimeMillis() + expiration))
+				.signWith(secretKey)
+				.compact();
+	}
 
-	    public String extractEmail(String token) {
-	    	 return Jwts.parserBuilder()
-	    	            .setSigningKey(secretKey)
-	    	            .build()
-	    	            .parseClaimsJws(token)
-	    	            .getBody()
-	    	            .getSubject();
-	    }
+	public String extractRole(String token) {
+		return parse(token).get("role", String.class);
+	}
 
-	    public boolean validateToken(String token) {
-	        try {
-	        	Jwts.parserBuilder()
-	            .setSigningKey(secretKey)
-	            .build()
-	            .parseClaimsJws(token);
-	        	return true;
-	        } catch (JwtException | IllegalArgumentException e) {
-	            return false;
-	        }
-	    }
+	public String extractEmail(String token) {
+		return parse(token).getSubject();
+	}
+
+	public boolean validateToken(String token) {
+		try {
+			parse(token);
+			return true;
+		} catch (JwtException | IllegalArgumentException e) {
+			return false;
+		}
+	}
+
+	/**
+	 * verifyWith rejects any token not signed by our key, including one whose
+	 * header claims "alg":"none". Never swap this for an unverified parse.
+	 */
+	private io.jsonwebtoken.Claims parse(String token) {
+		return Jwts.parser()
+				.verifyWith(secretKey)
+				.build()
+				.parseSignedClaims(token)
+				.getPayload();
+	}
 }
