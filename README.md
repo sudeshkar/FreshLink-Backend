@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Spring%20Security-JWT-6DB33F?style=flat-square&logo=springsecurity&logoColor=white" alt="Spring Security"/>
   <img src="https://img.shields.io/badge/Swagger-85EA2D?style=flat-square&logo=swagger&logoColor=black" alt="Swagger"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
-  <img src="https://img.shields.io/badge/tests-93%20passing-brightgreen?style=flat-square" alt="93 tests"/>
+  <img src="https://img.shields.io/badge/tests-99%20passing-brightgreen?style=flat-square" alt="99 tests"/>
 </p>
 
 ---
@@ -530,6 +530,10 @@ in about a minute, at roughly one query per user per minute rather than one per 
 Set `CACHE_BACKEND=redis` to share that answer across instances; otherwise each replica keeps
 its own copy and one can still accept a suspended account after another has noticed.
 
+The status cache is deliberately its own small abstraction rather than Spring's caching
+annotations — expiry here *is* the revocation bound, so it is checked on read and cannot be
+served stale even if nothing has swept.
+
 ### Observability
 
 Every request carries an `X-Request-Id`, generated if the caller does not supply one and
@@ -549,7 +553,7 @@ still traceable to the request that caused it.
 
 ## Testing
 
-**93 tests** — 78 unit, 15 integration. All of them run on every push.
+**99 tests** — 78 unit, 21 integration. All of them run on every push.
 
 ```bash
 ./mvnw test      # unit tests only (fast, no database needed for most)
