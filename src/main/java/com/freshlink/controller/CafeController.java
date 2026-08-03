@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.fishdto.FishMarketResponse;
 import com.freshlink.orderdto.OrderCreateRequest;
 import com.freshlink.orderdto.OrderResponse;
@@ -68,6 +69,11 @@ public class CafeController {
 	    	cafeService.cancelOrder(orderId,auth.getName());
 	    }
 	    
+	    @GetMapping("/orders/{orderId}/delivery")
+	    public DeliveryResponse trackDelivery(@PathVariable Long orderId, Authentication auth) {
+	        return cafeService.trackDelivery(orderId, auth.getName());
+	    }
+
 	    @PostMapping("/orders/{orderId}/rate")
 	    public void rateSupplier(@PathVariable Long orderId,@RequestBody RatingRequest ratingRequest,Authentication auth) {
 	    	ratingService.rateSupplier(orderId,ratingRequest,auth.getName());

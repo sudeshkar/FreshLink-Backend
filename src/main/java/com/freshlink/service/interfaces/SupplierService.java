@@ -5,6 +5,8 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import com.freshlink.deliverydto.DeliveryResponse;
+import com.freshlink.deliverydto.DeliveryUpdateRequest;
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
@@ -37,6 +39,13 @@ public interface SupplierService {
 		void completeOrder(Long orderId, String supplierEmail);
 
 		List<SupplyMatchResponse> getPendingMatches(String supplierEmail);
+
+	// ---- Delivery ----
+
+	DeliveryResponse getDelivery(Long orderId, String supplierEmail);
+
+	/** Assigns a driver, sets an ETA, or moves the delivery to its next state. */
+	DeliveryResponse updateDelivery(Long orderId, DeliveryUpdateRequest dto, String supplierEmail);
 
 	// ---- Daily supply: the matching engine's input ----
 

@@ -10,15 +10,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.freshlink.Repository.CafeRepository;
+import com.freshlink.Repository.DeliveryRepository;
 import com.freshlink.Repository.FishRepository;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.enums.OrderStatus;
 import com.freshlink.exception.BusinessRuleException;
 import com.freshlink.exception.ResourceNotFoundException;
+import com.freshlink.deliverydto.DeliveryResponse;
 import com.freshlink.fishdto.FishMarketResponse;
 import com.freshlink.mapper.FishMapper;
 import com.freshlink.mapper.OrderMapper;
 import com.freshlink.model.Cafe;
+import com.freshlink.model.Delivery;
 import com.freshlink.model.Fish;
 import com.freshlink.model.Order;
 import com.freshlink.model.OrderItem;
@@ -40,6 +43,7 @@ public class CafeServiceImpl implements CafeService{
     private final FishMapper fishMapper;
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
+    private final DeliveryRepository deliveryRepository;
 	
 	@Override
 	public CafeProfileResponse getProfile(String name) {
@@ -52,6 +56,33 @@ public class CafeServiceImpl implements CafeService{
 	public Page<FishMarketResponse> browseFish(String fishType, String city, Pageable pageable) {
 		return fishRepository.searchMarket(normaliseFilter(fishType), normaliseFilter(city), pageable)
 				.map(fishMapper::toFishMarket);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public DeliveryResponse trackDelivery(Long orderId, String cafeEmail) {
+		Cafe cafe = cafeRepository.findByEmail(cafeEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Cafe", cafeEmail));
+
+		// Scoped the same way as cancelOrder: another cafe's order is a 404, not a
+		// 403, so order ids stay unguessable.
+		Order order = orderRepository.findById(orderId)
+				.filter(o -> o.getCafe().getId().equals(cafe.getId()))
+				.orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+
+		Delivery delivery = deliveryRepository.findByOrder(order)
+				.orElseThrow(() -> new ResourceNotFoundException(
+						"No delivery has been scheduled yet for order", orderId));
+
+		return new DeliveryResponse(
+				delivery.getDeliveryId(),
+				order.getId(),
+				delivery.getStatus().name(),
+				delivery.getDriverName(),
+				delivery.getDriverPhone(),
+				delivery.getExpectedAt(),
+				delivery.getDeliveredAt(),
+				delivery.getNotes());
 	}
 
 	/**

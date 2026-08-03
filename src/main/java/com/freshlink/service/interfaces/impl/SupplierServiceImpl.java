@@ -3,6 +3,8 @@ package com.freshlink.service.interfaces.impl;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -18,6 +20,8 @@ import com.freshlink.Repository.FishTypeRepository;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.Repository.SupplierRepository;
 import com.freshlink.Repository.SupplyMatchRepository;
+import com.freshlink.deliverydto.DeliveryResponse;
+import com.freshlink.deliverydto.DeliveryUpdateRequest;
 import com.freshlink.enums.DeliveryStatus;
 import com.freshlink.enums.DemandStatus;
 import com.freshlink.enums.MatchStatus;
@@ -227,11 +231,20 @@ public class SupplierServiceImpl implements SupplierService{
 		Order order = validateSupplierOrder(orderId, supplierEmail);
 
 	    if (order.getStatus() != OrderStatus.DELIVERING) {
-	        throw new RuntimeException("Invalid state");
+	        throw new BusinessRuleException("Only an order that is out for delivery can be completed");
 	    }
 
 	    order.setStatus(OrderStatus.COMPLETED);
-		
+
+	    // Completing the order settles the delivery too, so the two cannot drift
+	    // apart and leave a delivered order tracking as still scheduled.
+	    deliveryRepository.findByOrder(order).ifPresent(delivery -> {
+	        if (delivery.getStatus() != DeliveryStatus.DELIVERED) {
+	            delivery.setStatus(DeliveryStatus.DELIVERED);
+	            delivery.setDeliveredAt(LocalDateTime.now());
+	            deliveryRepository.save(delivery);
+	        }
+	    });
 	}
 	
 	private Order validateSupplierOrder(Long orderId, String supplierEmail) {
@@ -260,6 +273,76 @@ public class SupplierServiceImpl implements SupplierService{
 		 
 	}
 	
+	// ---------------- DELIVERY ----------------
+
+	/** Which moves are legal from each state; terminal states allow none. */
+	private static final Map<DeliveryStatus, Set<DeliveryStatus>> ALLOWED_DELIVERY_MOVES = Map.of(
+			DeliveryStatus.SCHEDULED, Set.of(DeliveryStatus.IN_TRANSIT, DeliveryStatus.FAILED),
+			DeliveryStatus.IN_TRANSIT, Set.of(DeliveryStatus.DELIVERED, DeliveryStatus.FAILED),
+			// A failed attempt can be retried by putting it back on the road.
+			DeliveryStatus.FAILED, Set.of(DeliveryStatus.IN_TRANSIT),
+			DeliveryStatus.DELIVERED, Set.of());
+
+	@Override
+	public DeliveryResponse getDelivery(Long orderId, String supplierEmail) {
+		return toDeliveryResponse(requireDelivery(validateSupplierOrder(orderId, supplierEmail)));
+	}
+
+	@Override
+	public DeliveryResponse updateDelivery(Long orderId, DeliveryUpdateRequest dto, String supplierEmail) {
+		Order order = validateSupplierOrder(orderId, supplierEmail);
+		Delivery delivery = requireDelivery(order);
+
+		if (dto.status() != null && dto.status() != delivery.getStatus()) {
+			DeliveryStatus from = delivery.getStatus();
+			if (!ALLOWED_DELIVERY_MOVES.getOrDefault(from, Set.of()).contains(dto.status())) {
+				throw new BusinessRuleException(
+						"A delivery cannot move from %s to %s".formatted(from, dto.status()));
+			}
+
+			delivery.setStatus(dto.status());
+
+			// Arrival time is recorded by the system rather than supplied by the
+			// caller, so it cannot be backdated to hide a late delivery.
+			if (dto.status() == DeliveryStatus.DELIVERED) {
+				delivery.setDeliveredAt(LocalDateTime.now());
+			}
+		}
+
+		if (dto.driverName() != null) {
+			delivery.setDriverName(dto.driverName());
+		}
+		if (dto.driverPhone() != null) {
+			delivery.setDriverPhone(dto.driverPhone());
+		}
+		if (dto.expectedAt() != null) {
+			delivery.setExpectedAt(dto.expectedAt());
+		}
+		if (dto.notes() != null) {
+			delivery.setNotes(dto.notes());
+		}
+
+		return toDeliveryResponse(deliveryRepository.save(delivery));
+	}
+
+	private Delivery requireDelivery(Order order) {
+		return deliveryRepository.findByOrder(order)
+				.orElseThrow(() -> new ResourceNotFoundException(
+						"No delivery has been scheduled for order", order.getId()));
+	}
+
+	private DeliveryResponse toDeliveryResponse(Delivery delivery) {
+		return new DeliveryResponse(
+				delivery.getDeliveryId(),
+				delivery.getOrder().getId(),
+				delivery.getStatus().name(),
+				delivery.getDriverName(),
+				delivery.getDriverPhone(),
+				delivery.getExpectedAt(),
+				delivery.getDeliveredAt(),
+				delivery.getNotes());
+	}
+
 	// ---------------- DAILY SUPPLY ----------------
 
 	@Override

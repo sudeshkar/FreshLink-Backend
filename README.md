@@ -35,6 +35,7 @@ It runs two complementary trade flows:
 - **Rate-limited auth endpoints** — token-bucket caps on login and OTP issuance, per client IP and per email address, so credential stuffing and inbox flooding both hit a wall.
 - **Supplier fish catalogue** — full CRUD over listings, scoped so a supplier can only touch their own inventory.
 - **Café marketplace search** — browse available fish filtered by species and city. Suspended and removed suppliers never appear.
+- **Delivery tracking** — driver, phone, ETA and arrival time per order, with validated status transitions. Cafés can see where their fish is.
 - **Tracked order lifecycle** — orders move through accept, reject, delivering, and completion transitions, each a distinct authorised endpoint.
 - **Concurrency-safe stock** — reservations are guarded by an optimistic-locking version column, so two simultaneous orders cannot claim the same fish.
 - **Demand matching engine** — greedy allocation ranked by freshness, then supplier rating, then catch time; re-runs every 10 minutes for unfilled demand.
@@ -108,7 +109,9 @@ New accounts are created inactive and require **both** email verification and ad
 | `PUT` | `/suppliers/orders/{orderId}/accept` | Accept an order |
 | `PUT` | `/suppliers/orders/{orderId}/reject` | Reject an order |
 | `PUT` | `/suppliers/orders/{orderId}/markdelivering` | Mark as out for delivery |
-| `PUT` | `/suppliers/orders/{orderId}/complete` | Mark as delivered |
+| `PUT` | `/suppliers/orders/{orderId}/complete` | Mark as delivered — also settles the delivery |
+| `GET` | `/suppliers/orders/{orderId}/delivery` | Delivery detail |
+| `PUT` | `/suppliers/orders/{orderId}/delivery` | Assign driver, set ETA, advance status |
 | `POST` | `/suppliers/daily-supply` | Record today's catch — triggers matching immediately |
 | `GET` | `/suppliers/daily-supply` | List own recorded catch |
 | `PUT` | `/suppliers/daily-supply/{id}` | Adjust quantity or freshness |
@@ -126,6 +129,7 @@ New accounts are created inactive and require **both** email verification and ad
 | `POST` | `/cafes/orders` | Place an order (single supplier per order) |
 | `GET` | `/cafes/orders` | Order history (paged) |
 | `PUT` | `/cafes/orders/{orderId}/cancel` | Cancel while still pending |
+| `GET` | `/cafes/orders/{orderId}/delivery` | Track the delivery — driver, ETA, status |
 | `POST` | `/cafes/orders/{orderId}/rate` | Rate the supplier after completion, 1–5 |
 
 ### Demand — `/demand` · role `CAFE`
@@ -188,6 +192,22 @@ Default size is 20, capped at 100.
 ```
 
 Stock is reserved the moment an order is placed. Rejection and cancellation both return it.
+
+## Delivery
+
+A delivery record is raised when the supplier marks an order as delivering.
+
+```
+SCHEDULED ──▶ IN_TRANSIT ──▶ DELIVERED
+    │              │
+    └──────▶ FAILED ◀┘
+               │
+               └──▶ IN_TRANSIT   (retry)
+```
+
+`DELIVERED` is terminal. The arrival time is stamped by the server rather than
+supplied by the caller, so a late delivery cannot be backdated. Completing the order
+settles the delivery too, so the two can never drift apart.
 
 ## Demand Matching
 
@@ -461,7 +481,7 @@ Every failure returns a consistent body:
 
 ## Roadmap
 
-- [ ] Delivery assignment and route grouping
+- [ ] Delivery route grouping across orders
 
 ---
 

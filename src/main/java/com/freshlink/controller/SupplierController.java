@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.freshlink.deliverydto.DeliveryResponse;
+import com.freshlink.deliverydto.DeliveryUpdateRequest;
 import com.freshlink.fishdto.FishCreateRequest;
 import com.freshlink.fishdto.FishResponse;
 import com.freshlink.fishdto.FishUpdateRequest;
@@ -96,6 +98,25 @@ public class SupplierController {
     	supplierService.completeOrder(orderId,auth.getName());
     }
     
+    @Operation(summary = "Track a delivery",
+            description = "The delivery record is created when the order is marked as delivering.")
+    @GetMapping("/orders/{orderId}/delivery")
+    public DeliveryResponse getDelivery(@PathVariable Long orderId, Authentication auth) {
+        return supplierService.getDelivery(orderId, auth.getName());
+    }
+
+    @Operation(summary = "Assign a driver, set an ETA, or advance the delivery",
+            description = "Legal moves: SCHEDULED to IN_TRANSIT or FAILED, IN_TRANSIT to "
+                    + "DELIVERED or FAILED, FAILED back to IN_TRANSIT to retry. DELIVERED is final. "
+                    + "The arrival time is recorded by the server, not supplied by the caller.")
+    @PutMapping("/orders/{orderId}/delivery")
+    public DeliveryResponse updateDelivery(
+            @PathVariable Long orderId,
+            @RequestBody @Valid DeliveryUpdateRequest dto,
+            Authentication auth) {
+        return supplierService.updateDelivery(orderId, dto, auth.getName());
+    }
+
     @Operation(summary = "Record today's catch",
             description = "Feeds the matching engine. Matching runs immediately on save, "
                     + "so a match may already exist by the time this returns.")

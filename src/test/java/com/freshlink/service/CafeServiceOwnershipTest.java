@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.freshlink.Repository.CafeRepository;
+import com.freshlink.Repository.DeliveryRepository;
 import com.freshlink.Repository.FishRepository;
 import com.freshlink.Repository.OrderRepository;
 import com.freshlink.enums.OrderStatus;
@@ -37,6 +38,7 @@ class CafeServiceOwnershipTest {
 	@Mock private FishMapper fishMapper;
 	@Mock private OrderRepository orderRepository;
 	@Mock private OrderMapper orderMapper;
+	@Mock private DeliveryRepository deliveryRepository;
 
 	@InjectMocks private CafeServiceImpl cafeService;
 
